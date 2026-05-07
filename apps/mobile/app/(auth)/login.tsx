@@ -1,16 +1,22 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../lib/auth-context';
 
 export default function LoginScreen() {
   const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { login } = useAuth();
 
-  function handleSubmit() {
+  async function handleSubmit() {
     const trimmed = phone.trim();
     if (trimmed.length < 10) return;
-    login(trimmed);
+    setError(null);
+    setLoading(true);
+    const { error: err } = await login(trimmed);
+    setLoading(false);
+    if (err) setError(err);
   }
 
   return (
@@ -30,15 +36,27 @@ export default function LoginScreen() {
             keyboardType="phone-pad"
             maxLength={14}
             value={phone}
-            onChangeText={setPhone}
+            onChangeText={(t) => { setPhone(t); setError(null); }}
+            editable={!loading}
           />
 
+          {error && (
+            <Text className="text-red-500 text-sm mb-3 text-center">{error}</Text>
+          )}
+
           <TouchableOpacity
-            className="w-full bg-primary rounded-xl py-4 items-center"
+            className={`w-full rounded-xl py-4 items-center ${phone.trim().length >= 10 && !loading ? 'bg-primary' : 'bg-gray-200'}`}
             onPress={handleSubmit}
+            disabled={phone.trim().length < 10 || loading}
             activeOpacity={0.85}
           >
-            <Text className="text-white text-base font-semibold">Doğrulama Kodu Gönder</Text>
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text className={`text-base font-semibold ${phone.trim().length >= 10 ? 'text-white' : 'text-gray-400'}`}>
+                Doğrulama Kodu Gönder
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

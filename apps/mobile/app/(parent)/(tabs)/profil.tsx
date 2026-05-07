@@ -1,7 +1,9 @@
 import { View, Text, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../../lib/auth-context';
-import { MOCK_SCHOOL_NAME } from '../../../lib/mock-data';
+// import { supabase } from '../../../lib/supabase';
+// TODO: Okul adı profiles/schools tablosundan çekilecek:
+// const { data } = await supabase.from('schools').select('name').eq('id', schoolId).single();
 
 export default function ParentProfilScreen() {
   const { phone, name, logout } = useAuth();
@@ -23,14 +25,14 @@ export default function ParentProfilScreen() {
           <View className="w-16 h-16 rounded-full bg-red-100 items-center justify-center mb-3">
             <Text className="text-2xl font-bold text-red-600">{initial}</Text>
           </View>
-          <Text className="text-base font-semibold text-gray-900">{name ?? 'Veli'}</Text>
+          <Text className="text-base font-semibold text-gray-900">{name || 'Veli'}</Text>
           <Text className="text-sm text-gray-500">{phone ?? '-'}</Text>
         </View>
 
         <View className="border-t border-gray-100 pt-4">
           <Row label="Telefon" value={phone ?? '-'} />
           <Row label="Rol" value="Veli" />
-          <Row label="Okul" value={MOCK_SCHOOL_NAME} />
+          <Row label="Okul" value="—" />
         </View>
       </View>
 

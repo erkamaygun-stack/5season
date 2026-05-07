@@ -1,8 +1,9 @@
-import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../../lib/auth-context';
-import { MOCK_TODAY_GROUPS } from '../../../lib/mock-data';
+// import { supabase } from '../../../lib/supabase';
 
 const TR_DAYS = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
 const TR_MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
@@ -12,11 +13,53 @@ function todayLabel() {
   return `${TR_DAYS[d.getDay()]}, ${d.getDate()} ${TR_MONTHS[d.getMonth()]}`;
 }
 
+type SessionGroup = {
+  id: string;
+  groupId: string;
+  groupName: string;
+  time: string;
+  studentCount: number;
+};
+
 export default function CoachHomeScreen() {
   const router = useRouter();
-  const { name } = useAuth();
-  const groups = MOCK_TODAY_GROUPS;
+  const { name, userId } = useAuth();
+  const [groups, setGroups] = useState<SessionGroup[]>([]);
+  const [loading, setLoading] = useState(true);
   const firstName = name ? name.split(' ')[0] : 'Antrenör';
+
+  useEffect(() => {
+    loadTodaySessions();
+  }, [userId]);
+
+  async function loadTodaySessions() {
+    setLoading(true);
+    // TODO: Supabase tabloları hazır olduğunda aşağıdaki sorguyu aktif et
+    // const today = new Date().toISOString().split('T')[0];
+    // const { data, error } = await supabase
+    //   .from('attendance_sessions')
+    //   .select(`
+    //     id,
+    //     scheduled_at,
+    //     groups ( id, name ),
+    //     attendance_records ( count )
+    //   `)
+    //   .eq('date', today)
+    //   .eq('groups.coach_id', userId)
+    //   .neq('status', 'cancelled')
+    //   .order('scheduled_at');
+    // if (!error && data) {
+    //   setGroups(data.map((s) => ({
+    //     id: s.id,
+    //     groupId: s.groups.id,
+    //     groupName: s.groups.name,
+    //     time: s.scheduled_at.slice(11, 16),
+    //     studentCount: s.attendance_records[0]?.count ?? 0,
+    //   })));
+    // }
+    setGroups([]);
+    setLoading(false);
+  }
 
   function handleCancel(groupName: string) {
     Alert.alert(
@@ -40,7 +83,11 @@ export default function CoachHomeScreen() {
         <Text className="text-sm text-gray-500 mb-1">{todayLabel()}</Text>
         <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-5">Bugünkü Antrenmanlar</Text>
 
-        {groups.length === 0 ? (
+        {loading ? (
+          <View className="items-center pt-16">
+            <ActivityIndicator size="large" color="#3b82f6" />
+          </View>
+        ) : groups.length === 0 ? (
           <View className="items-center pt-16">
             <Text className="text-4xl mb-3">📅</Text>
             <Text className="text-base text-gray-500">Bugün antrenman yok.</Text>

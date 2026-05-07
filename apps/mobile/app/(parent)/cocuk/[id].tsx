@@ -1,17 +1,18 @@
-import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, SafeAreaView } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, SafeAreaView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { MOCK_CHILD_DETAIL } from '../../../lib/mock-data';
+import { type AttendanceStatus } from '../../../lib/mock-data';
+// import { supabase } from '../../../lib/supabase';
 
 const DAYS: Record<number, string> = {
   0: 'Pazar', 1: 'Pazartesi', 2: 'Salı', 3: 'Çarşamba', 4: 'Perşembe', 5: 'Cuma', 6: 'Cumartesi',
 };
 
 const STATUS_CONFIG = {
-  present:  { label: 'Geldi',    emoji: '✅', bg: 'bg-green-50',  text: 'text-green-700' },
-  absent:   { label: 'Gelmedi',  emoji: '❌', bg: 'bg-red-50',    text: 'text-red-700' },
-  late:     { label: 'Geç',      emoji: '⏱',  bg: 'bg-yellow-50', text: 'text-yellow-700' },
-  excused:  { label: 'İzinli',   emoji: '📋', bg: 'bg-blue-50',   text: 'text-blue-700' },
+  present:  { label: 'Geldi',   emoji: '✅', bg: 'bg-green-50',  text: 'text-green-700' },
+  absent:   { label: 'Gelmedi', emoji: '❌', bg: 'bg-red-50',    text: 'text-red-700' },
+  late:     { label: 'Geç',     emoji: '⏱',  bg: 'bg-yellow-50', text: 'text-yellow-700' },
+  excused:  { label: 'İzinli',  emoji: '📋', bg: 'bg-blue-50',   text: 'text-blue-700' },
 };
 
 type Tab = 'program' | 'yoklama' | 'borc' | 'izin';
@@ -23,6 +24,19 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'izin', label: 'İzin Bildir' },
 ];
 
+type ScheduleSlot = { day_of_week: number; start_time: string };
+type Group = { id: string; name: string; slots: ScheduleSlot[] };
+type AttendanceRecord = { date: string; status: AttendanceStatus };
+type Invoice = { id: string; month: string; amount: number; paidAmount: number; status: string };
+
+type ChildDetail = {
+  id: string;
+  fullName: string;
+  group: Group | null;
+  attendance: AttendanceRecord[];
+  invoices: Invoice[];
+};
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
 }
@@ -31,9 +45,7 @@ function formatCurrency(n: number) {
   return n.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 });
 }
 
-// --- Tab views ---
-
-function ProgramTab({ child }: { child: typeof MOCK_CHILD_DETAIL }) {
+function ProgramTab({ child }: { child: ChildDetail }) {
   if (!child.group) {
     return <Text className="text-gray-500 mt-4 text-center">Grup atanmamış.</Text>;
   }
@@ -55,7 +67,15 @@ function ProgramTab({ child }: { child: typeof MOCK_CHILD_DETAIL }) {
   );
 }
 
-function YoklamaTab({ child }: { child: typeof MOCK_CHILD_DETAIL }) {
+function YoklamaTab({ child }: { child: ChildDetail }) {
+  if (child.attendance.length === 0) {
+    return (
+      <View className="items-center pt-12">
+        <Text className="text-4xl mb-3">📋</Text>
+        <Text className="text-base text-gray-500">Yoklama kaydı yok.</Text>
+      </View>
+    );
+  }
   return (
     <View>
       <Text className="text-sm font-semibold text-gray-700 mb-2">Son Devamsızlık Kayıtları</Text>
@@ -75,9 +95,18 @@ function YoklamaTab({ child }: { child: typeof MOCK_CHILD_DETAIL }) {
   );
 }
 
-function BorcTab({ child }: { child: typeof MOCK_CHILD_DETAIL }) {
+function BorcTab({ child }: { child: ChildDetail }) {
   const pending = child.invoices.filter((inv) => inv.status === 'pending');
   const total = pending.reduce((s, inv) => s + (inv.amount - inv.paidAmount), 0);
+
+  if (child.invoices.length === 0) {
+    return (
+      <View className="items-center pt-12">
+        <Text className="text-4xl mb-3">✅</Text>
+        <Text className="text-base text-gray-500">Fatura kaydı yok.</Text>
+      </View>
+    );
+  }
 
   return (
     <View>
@@ -120,12 +149,17 @@ function BorcTab({ child }: { child: typeof MOCK_CHILD_DETAIL }) {
   );
 }
 
-function IzinTab() {
+function IzinTab({ studentId }: { studentId: string }) {
   const [note, setNote] = useState('');
   const [sent, setSent] = useState(false);
 
-  function handleSend() {
+  async function handleSend() {
     if (!note.trim()) return;
+    // TODO: Supabase tabloları hazır olduğunda aşağıdaki sorguyu aktif et
+    // const { error } = await supabase
+    //   .from('leave_requests')
+    //   .insert({ student_id: studentId, note: note.trim() });
+    // if (error) { Alert.alert('Hata', error.message); return; }
     setSent(true);
     Alert.alert('İzin Bildirimi', 'İzin talebiniz iletildi.');
   }
@@ -167,19 +201,90 @@ function IzinTab() {
   );
 }
 
-// --- Main screen ---
-
 export default function CocukDetayScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>('program');
+  const [child, setChild] = useState<ChildDetail | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Gerçek Supabase bağlantısı kurulana kadar mock data
-  const child = MOCK_CHILD_DETAIL;
+  useEffect(() => {
+    loadChild();
+  }, [id]);
+
+  async function loadChild() {
+    setLoading(true);
+    // TODO: Supabase tabloları hazır olduğunda aşağıdaki sorguyu aktif et
+    // const { data, error } = await supabase
+    //   .from('students')
+    //   .select(`
+    //     id,
+    //     full_name,
+    //     student_groups (
+    //       groups ( id, name, group_schedule_slots ( day_of_week, start_time ) )
+    //     ),
+    //     attendance_records (
+    //       attendance_sessions ( date ),
+    //       status
+    //     ),
+    //     aidat_invoices ( id, month, amount, paid_amount, status )
+    //   `)
+    //   .eq('id', id)
+    //   .single();
+    // if (!error && data) {
+    //   const activeGroup = data.student_groups?.[0]?.groups ?? null;
+    //   setChild({
+    //     id: data.id,
+    //     fullName: data.full_name,
+    //     group: activeGroup ? {
+    //       id: activeGroup.id,
+    //       name: activeGroup.name,
+    //       slots: activeGroup.group_schedule_slots ?? [],
+    //     } : null,
+    //     attendance: (data.attendance_records ?? []).map((r) => ({
+    //       date: r.attendance_sessions.date,
+    //       status: r.status as AttendanceStatus,
+    //     })),
+    //     invoices: (data.aidat_invoices ?? []).map((inv) => ({
+    //       id: inv.id,
+    //       month: inv.month,
+    //       amount: inv.amount,
+    //       paidAmount: inv.paid_amount ?? 0,
+    //       status: inv.status,
+    //     })),
+    //   });
+    // }
+    setChild(null);
+    setLoading(false);
+  }
+
+  if (loading) {
+    return (
+      <SafeAreaView className="flex-1 bg-gray-50 justify-center items-center">
+        <ActivityIndicator size="large" color="#dc2626" />
+      </SafeAreaView>
+    );
+  }
+
+  if (!child) {
+    return (
+      <SafeAreaView className="flex-1 bg-gray-50">
+        <View className="flex-row items-center px-4 pt-4 pb-3 bg-white border-b border-gray-100">
+          <TouchableOpacity onPress={() => router.back()} className="mr-3 p-1">
+            <Text className="text-xl text-gray-700">‹</Text>
+          </TouchableOpacity>
+          <Text className="text-base font-bold text-gray-900">Öğrenci</Text>
+        </View>
+        <View className="flex-1 justify-center items-center">
+          <Text className="text-4xl mb-3">⚽</Text>
+          <Text className="text-base text-gray-500">Öğrenci bilgisi yüklenemedi.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
-      {/* Header */}
       <View className="flex-row items-center px-4 pt-4 pb-3 bg-white border-b border-gray-100">
         <TouchableOpacity onPress={() => router.back()} className="mr-3 p-1">
           <Text className="text-xl text-gray-700">‹</Text>
@@ -187,7 +292,6 @@ export default function CocukDetayScreen() {
         <Text className="text-base font-bold text-gray-900 flex-1">{child.fullName}</Text>
       </View>
 
-      {/* Tab Bar */}
       <View className="flex-row bg-white border-b border-gray-100 px-2">
         {TABS.map((tab) => (
           <TouchableOpacity
@@ -202,12 +306,11 @@ export default function CocukDetayScreen() {
         ))}
       </View>
 
-      {/* Content */}
       <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         {activeTab === 'program' && <ProgramTab child={child} />}
         {activeTab === 'yoklama' && <YoklamaTab child={child} />}
         {activeTab === 'borc' && <BorcTab child={child} />}
-        {activeTab === 'izin' && <IzinTab />}
+        {activeTab === 'izin' && <IzinTab studentId={child.id} />}
       </ScrollView>
     </SafeAreaView>
   );

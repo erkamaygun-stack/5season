@@ -1,12 +1,13 @@
 import '../global.css';
 import { useEffect, useState } from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '../lib/auth-context';
 
 function NavigationGuard() {
   const router = useRouter();
   const segments = useSegments();
-  const { role } = useAuth();
+  const { role, loading } = useAuth();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -14,7 +15,7 @@ function NavigationGuard() {
   }, []);
 
   useEffect(() => {
-    if (!mounted) return;
+    if (!mounted || loading) return;
 
     const inAuth = segments[0] === '(auth)';
 
@@ -27,7 +28,15 @@ function NavigationGuard() {
       if (role === 'parent') router.replace('/(parent)');
       else if (role === 'coach') router.replace('/(coach)');
     }
-  }, [role, segments, mounted]);
+  }, [role, segments, mounted, loading]);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+      </View>
+    );
+  }
 
   return <Slot />;
 }

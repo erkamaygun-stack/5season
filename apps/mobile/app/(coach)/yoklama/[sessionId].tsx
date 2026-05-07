@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert, SafeAreaView } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, FlatList, TouchableOpacity, Alert, SafeAreaView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { MOCK_STUDENTS, MOCK_TODAY_GROUPS, type AttendanceStatus } from '../../../lib/mock-data';
+import { type AttendanceStatus } from '../../../lib/mock-data';
+// import { supabase } from '../../../lib/supabase';
 
 type StudentRecord = {
   id: string;
@@ -9,11 +10,15 @@ type StudentRecord = {
   status: AttendanceStatus;
 };
 
+type SessionInfo = {
+  groupName: string;
+};
+
 const BUTTONS: { status: NonNullable<AttendanceStatus>; label: string; activeClass: string; inactiveClass: string }[] = [
-  { status: 'present', label: '✓ Geldi',    activeClass: 'bg-green-500',  inactiveClass: 'bg-gray-100' },
-  { status: 'absent',  label: '✗ Gelmedi',  activeClass: 'bg-red-500',    inactiveClass: 'bg-gray-100' },
-  { status: 'late',    label: '⏱ Geç',      activeClass: 'bg-yellow-400', inactiveClass: 'bg-gray-100' },
-  { status: 'excused', label: '📋 İzinli',  activeClass: 'bg-blue-400',   inactiveClass: 'bg-gray-100' },
+  { status: 'present', label: '✓ Geldi',   activeClass: 'bg-green-500',  inactiveClass: 'bg-gray-100' },
+  { status: 'absent',  label: '✗ Gelmedi', activeClass: 'bg-red-500',    inactiveClass: 'bg-gray-100' },
+  { status: 'late',    label: '⏱ Geç',     activeClass: 'bg-yellow-400', inactiveClass: 'bg-gray-100' },
+  { status: 'excused', label: '📋 İzinli', activeClass: 'bg-blue-400',   inactiveClass: 'bg-gray-100' },
 ];
 
 function initials(fullName: string) {
@@ -62,11 +67,40 @@ export default function YoklamaScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const router = useRouter();
 
-  const session = MOCK_TODAY_GROUPS.find((g) => g.id === sessionId) ?? MOCK_TODAY_GROUPS[0];
+  const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
+  const [students, setStudents] = useState<StudentRecord[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [students, setStudents] = useState<StudentRecord[]>(
-    MOCK_STUDENTS.map((s) => ({ ...s }))
-  );
+  useEffect(() => {
+    loadSession();
+  }, [sessionId]);
+
+  async function loadSession() {
+    setLoading(true);
+    // TODO: Supabase tabloları hazır olduğunda aşağıdaki sorguyu aktif et
+    // const { data: session } = await supabase
+    //   .from('attendance_sessions')
+    //   .select('id, groups ( name )')
+    //   .eq('id', sessionId)
+    //   .single();
+    // setSessionInfo({ groupName: session?.groups?.name ?? 'Yoklama' });
+    //
+    // const { data: records } = await supabase
+    //   .from('attendance_records')
+    //   .select('id, status, students ( id, full_name )')
+    //   .eq('session_id', sessionId)
+    //   .order('students(full_name)');
+    // if (records) {
+    //   setStudents(records.map((r) => ({
+    //     id: r.id,
+    //     fullName: r.students.full_name,
+    //     status: r.status as AttendanceStatus,
+    //   })));
+    // }
+    setSessionInfo({ groupName: 'Yoklama' });
+    setStudents([]);
+    setLoading(false);
+  }
 
   function mark(id: string, status: NonNullable<AttendanceStatus>) {
     setStudents((prev) =>
@@ -77,31 +111,51 @@ export default function YoklamaScreen() {
   const markedCount = students.filter((s) => s.status !== null).length;
   const presentCount = students.filter((s) => s.status === 'present').length;
 
-  function handleSave() {
+  async function handleSave() {
     if (markedCount < students.length) {
       Alert.alert(
         'Eksik Yoklama',
         `${students.length - markedCount} öğrenci için durum seçilmedi. Yine de kaydet?`,
         [
           { text: 'İptal', style: 'cancel' },
-          { text: 'Kaydet', onPress: () => { Alert.alert('Kaydedildi', 'Yoklama başarıyla kaydedildi.'); router.back(); } },
+          { text: 'Kaydet', onPress: saveAttendance },
         ]
       );
     } else {
-      Alert.alert('Kaydedildi', 'Yoklama başarıyla kaydedildi.');
-      router.back();
+      saveAttendance();
     }
+  }
+
+  async function saveAttendance() {
+    // TODO: Supabase tabloları hazır olduğunda aşağıdaki sorguyu aktif et
+    // const updates = students.map((s) => ({
+    //   id: s.id,
+    //   status: s.status,
+    // }));
+    // const { error } = await supabase
+    //   .from('attendance_records')
+    //   .upsert(updates);
+    // if (error) { Alert.alert('Hata', error.message); return; }
+    Alert.alert('Kaydedildi', 'Yoklama başarıyla kaydedildi.');
+    router.back();
+  }
+
+  if (loading) {
+    return (
+      <SafeAreaView className="flex-1 bg-gray-50 justify-center items-center">
+        <ActivityIndicator size="large" color="#3b82f6" />
+      </SafeAreaView>
+    );
   }
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
-      {/* Header */}
       <View className="flex-row items-center px-4 pt-4 pb-3 bg-white border-b border-gray-100">
         <TouchableOpacity onPress={() => router.back()} className="mr-3 p-1">
           <Text className="text-xl text-gray-700">‹</Text>
         </TouchableOpacity>
         <View className="flex-1">
-          <Text className="text-base font-bold text-gray-900">{session?.groupName ?? 'Yoklama'}</Text>
+          <Text className="text-base font-bold text-gray-900">{sessionInfo?.groupName ?? 'Yoklama'}</Text>
           <Text className="text-xs text-gray-500">
             {new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
           </Text>
@@ -111,15 +165,20 @@ export default function YoklamaScreen() {
         </View>
       </View>
 
-      {/* Student List */}
-      <FlatList
-        data={students}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <StudentRow student={item} onMark={mark} />}
-        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-      />
+      {students.length === 0 ? (
+        <View className="flex-1 justify-center items-center">
+          <Text className="text-4xl mb-3">👥</Text>
+          <Text className="text-base text-gray-500">Öğrenci listesi yüklenemedi.</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={students}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <StudentRow student={item} onMark={mark} />}
+          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+        />
+      )}
 
-      {/* Footer */}
       <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-3 pb-6">
         <View className="flex-row items-center mb-2">
           <Text className="text-xs text-gray-500 flex-1">

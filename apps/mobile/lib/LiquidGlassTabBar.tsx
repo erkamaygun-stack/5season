@@ -25,7 +25,7 @@ export function LiquidGlassTabBar({ state, descriptors, navigation, activeColor 
                 target: route.key,
                 canPreventDefault: true,
               } as Parameters<typeof navigation.emit>[0]);
-              if (!focused && !event.defaultPrevented) navigation.navigate(route.name, {});
+              if (!focused && !(event as { defaultPrevented?: boolean }).defaultPrevented) navigation.navigate(route.name, {});
             }
 
             return (

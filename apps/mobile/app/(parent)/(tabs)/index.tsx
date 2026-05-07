@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../../lib/auth-context';
-import { MOCK_CHILDREN } from '../../../lib/mock-data';
+// import { supabase } from '../../../lib/supabase';
 
 const DAYS: Record<number, string> = {
   0: 'Paz', 1: 'Pzt', 2: 'Sal', 3: 'Çar', 4: 'Per', 5: 'Cum', 6: 'Cmt',
@@ -77,17 +77,47 @@ export default function ParentHomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
-  const { name } = useAuth();
+  const { name, userId } = useAuth();
 
-  function load(isRefresh = false) {
+  async function load(isRefresh = false) {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
-    setChildren(MOCK_CHILDREN as Child[]);
+
+    // TODO: Supabase tabloları hazır olduğunda aşağıdaki sorguyu aktif et
+    // const { data, error } = await supabase
+    //   .from('parent_student')
+    //   .select(`
+    //     students (
+    //       id,
+    //       full_name,
+    //       student_groups (
+    //         groups (
+    //           id,
+    //           name,
+    //           group_schedule_slots ( day_of_week, start_time )
+    //         )
+    //       ),
+    //       aidat_invoices ( amount, paid_amount, status )
+    //     )
+    //   `)
+    //   .eq('parent_id', userId);
+    // if (!error && data) {
+    //   setChildren(data.map((ps) => {
+    //     const s = ps.students;
+    //     const activeGroup = s.student_groups?.[0]?.groups ?? null;
+    //     const totalDebt = (s.aidat_invoices ?? [])
+    //       .filter((inv) => inv.status !== 'paid')
+    //       .reduce((sum, inv) => sum + (inv.amount - (inv.paid_amount ?? 0)), 0);
+    //     return { id: s.id, full_name: s.full_name, group: activeGroup, totalDebt };
+    //   }));
+    // }
+
+    setChildren([]);
     if (isRefresh) setRefreshing(false);
     else setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [userId]);
 
   const firstName = name ? name.split(' ')[0] : 'Veli';
 
@@ -113,6 +143,7 @@ export default function ParentHomeScreen() {
 
         {children.length === 0 ? (
           <View className="flex-1 justify-center items-center pt-20">
+            <Text className="text-4xl mb-3">⚽</Text>
             <Text className="text-base text-gray-500">Henüz öğrenci eklenmemiş.</Text>
           </View>
         ) : (

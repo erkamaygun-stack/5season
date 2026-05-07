@@ -1,6 +1,8 @@
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MOCK_NOTIFICATIONS } from '../../../lib/mock-data';
+// import { supabase } from '../../../lib/supabase';
+// import { useAuth } from '../../../lib/auth-context';
 
 function formatDate(iso: string) {
   const d = new Date(iso);
@@ -13,15 +15,53 @@ const ICONS: Record<string, string> = {
   'Yoklama Güncellendi': '✅',
 };
 
+type Notification = {
+  id: string;
+  title: string;
+  body: string;
+  createdAt: string;
+};
+
 export default function BildirimlerScreen() {
-  const notifications = MOCK_NOTIFICATIONS;
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  // const { userId } = useAuth();
+
+  useEffect(() => {
+    loadNotifications();
+  }, []);
+
+  async function loadNotifications() {
+    setLoading(true);
+    // TODO: Supabase tabloları hazır olduğunda aşağıdaki sorguyu aktif et
+    // const { data, error } = await supabase
+    //   .from('notification_log')
+    //   .select('id, title, body, created_at')
+    //   .eq('recipient_user_id', userId)
+    //   .order('created_at', { ascending: false })
+    //   .limit(50);
+    // if (!error && data) {
+    //   setNotifications(data.map((n) => ({
+    //     id: n.id,
+    //     title: n.title,
+    //     body: n.body,
+    //     createdAt: n.created_at,
+    //   })));
+    // }
+    setNotifications([]);
+    setLoading(false);
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50" edges={['top']}>
       <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 110 }}>
         <Text className="text-xl font-bold text-gray-900 mb-4">Bildirimler</Text>
 
-        {notifications.length === 0 ? (
+        {loading ? (
+          <View className="items-center pt-16">
+            <ActivityIndicator size="large" color="#dc2626" />
+          </View>
+        ) : notifications.length === 0 ? (
           <View className="flex-1 justify-center items-center pt-20">
             <Text className="text-4xl mb-3">🔔</Text>
             <Text className="text-base text-gray-500">Henüz bildirim yok.</Text>
