@@ -1,61 +1,47 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '../../lib/auth-context';
 
 export default function LoginScreen() {
+  const [phone, setPhone] = useState('');
+  const { login } = useAuth();
+
+  function handleSubmit() {
+    const trimmed = phone.trim();
+    if (trimmed.length < 10) return;
+    login(trimmed);
+  }
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>5mevsim</Text>
-      <Text style={styles.subtitle}>Giriş Yap</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="+90 5XX XXX XX XX"
-        keyboardType="phone-pad"
-        maxLength={13}
-      />
-      <TouchableOpacity style={styles.button}>
-        <Text style={styles.buttonText}>Doğrulama Kodu Gönder</Text>
-      </TouchableOpacity>
-    </View>
+    <SafeAreaView className="flex-1 bg-white">
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View className="flex-1 justify-center px-6">
+          <Text className="text-4xl font-bold text-primary text-center mb-2">5mevsim</Text>
+          <Text className="text-base text-gray-500 text-center mb-10">Hesabınıza giriş yapın</Text>
+
+          <Text className="text-sm font-medium text-gray-700 mb-1.5">Telefon Numarası</Text>
+          <TextInput
+            className="w-full border border-gray-300 rounded-xl px-4 py-3.5 text-base text-gray-900 mb-4"
+            placeholder="0555 123 45 67"
+            keyboardType="phone-pad"
+            maxLength={14}
+            value={phone}
+            onChangeText={setPhone}
+          />
+
+          <TouchableOpacity
+            className="w-full bg-primary rounded-xl py-4 items-center"
+            onPress={handleSubmit}
+            activeOpacity={0.85}
+          >
+            <Text className="text-white text-base font-semibold">Doğrulama Kodu Gönder</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: '#fff',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#16a34a',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 18,
-    color: '#6b7280',
-    marginBottom: 40,
-  },
-  input: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 10,
-    padding: 14,
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  button: {
-    width: '100%',
-    backgroundColor: '#16a34a',
-    padding: 16,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});

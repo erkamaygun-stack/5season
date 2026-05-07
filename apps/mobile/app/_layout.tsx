@@ -1,32 +1,41 @@
-import { useEffect } from 'react';
+import '../global.css';
+import { useEffect, useState } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
+import { AuthProvider, useAuth } from '../lib/auth-context';
 
-// Geçici sabit — gerçek auth gelince Supabase session ile değiştirilecek
-const MOCK_AUTH = {
-  isAuthenticated: true,
-  role: 'parent' as 'parent' | 'coach' | null,
-};
-
-export default function RootLayout() {
+function NavigationGuard() {
   const router = useRouter();
   const segments = useSegments();
+  const { role } = useAuth();
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+
     const inAuth = segments[0] === '(auth)';
 
-    if (!MOCK_AUTH.isAuthenticated) {
+    if (!role) {
       if (!inAuth) router.replace('/(auth)/login');
       return;
     }
 
-    if (inAuth || segments.length === 0) {
-      if (MOCK_AUTH.role === 'parent') {
-        router.replace('/(parent)');
-      } else if (MOCK_AUTH.role === 'coach') {
-        router.replace('/(coach)');
-      }
+    if (inAuth || (segments as string[]).length === 0) {
+      if (role === 'parent') router.replace('/(parent)');
+      else if (role === 'coach') router.replace('/(coach)');
     }
-  }, [segments]);
+  }, [role, segments, mounted]);
 
   return <Slot />;
+}
+
+export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <NavigationGuard />
+    </AuthProvider>
+  );
 }
