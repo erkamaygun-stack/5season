@@ -1,0 +1,28 @@
+# env files — never commit
+.env
+.env.local
+.env*.local
+
+# dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Supabase local
+supabase/.branches/
+supabase/.temp/
+
+# misc
+.DS_Store
+*.pem
+
+# Claude Code
+.claude/
+claude.md
