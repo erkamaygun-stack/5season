@@ -6,7 +6,6 @@ type Role = 'parent' | 'coach';
 
 type AuthState = {
   phone: string | null;
-  pendingEmail: string | null; // OTP akışında geçici; verifyOtp sonrası temizlenir
   role: Role | null;
   name: string | null;
   userId: string | null;
@@ -35,7 +34,6 @@ function toE164(phone: string): string {
 
 const EMPTY_STATE: AuthState = {
   phone: null,
-  pendingEmail: null,
   role: null,
   name: null,
   userId: null,
@@ -71,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .single();
 
     if (error || !profile) {
-      setState((s) => ({ ...s, phone, role: 'parent', name: 'Kullanıcı', userId, schoolId: null, schoolName: null, logoUrl: null, staffId: null, groupName: null, loading: false, pendingEmail: null }));
+      setState((s) => ({ ...s, phone, role: 'parent', name: 'Kullanıcı', userId, schoolId: null, schoolName: null, logoUrl: null, staffId: null, groupName: null, loading: false }));
       return;
     }
 
@@ -110,7 +108,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setState({
       phone,
-      pendingEmail: null,
       role: profile.role as Role,
       name: profile.full_name,
       userId,
@@ -126,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function login(phone: string): Promise<{ error: string | null }> {
     const e164 = toE164(phone);
 
-    // Telefon numarasının profiles tablosunda kayıtlı olup olmadığını kontrol et
+    // Telefon numarasının sistemde kayıtlı olup olmadığını kontrol et (bilinmeyen numaralara SMS gönderme)
     const { data, error: rpcError } = await supabase.rpc('check_mobile_phone', { p_phone: e164 });
 
     if (rpcError) {
@@ -137,33 +134,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: 'Bu telefon numarası sisteme kayıtlı değil.' };
     }
 
-    if (data.setup_incomplete) {
-      return { error: 'Hesap kurulumu tamamlanmamış. Lütfen yönetici ile iletişime geçin.' };
+    // SMS OTP gönder
+    const { error: otpError } = await supabase.auth.signInWithOtp({
+      phone: e164,
+      options: { shouldCreateUser: false },
+    });
+
+    if (otpError) {
+      return { error: 'SMS gönderilemedi. Lütfen tekrar deneyin.' };
     }
 
-    setState((s) => ({ ...s, phone: e164, pendingEmail: data.email as string }));
+    setState((s) => ({ ...s, phone: e164 }));
     router.push('/(auth)/otp');
     return { error: null };
   }
 
   async function verifyOtp(code: string): Promise<{ error: string | null }> {
-    // Geliştirme/test ortamı: sabit OTP kodu
-    if (code !== '111111') {
-      return { error: 'Hatalı doğrulama kodu. Lütfen tekrar deneyin.' };
-    }
-
-    const pendingEmail = state.pendingEmail;
-    if (!pendingEmail) {
+    const phone = state.phone;
+    if (!phone) {
       return { error: 'Oturum bilgisi bulunamadı. Lütfen telefon numaranızı tekrar girin.' };
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: pendingEmail,
-      password: '111111',
+    const { error } = await supabase.auth.verifyOtp({
+      phone,
+      token: code,
+      type: 'sms',
     });
 
     if (error) {
-      return { error: 'Giriş başarısız. Hesap bilgilerini kontrol edin.' };
+      return { error: 'Hatalı veya süresi dolmuş kod. Lütfen tekrar deneyin.' };
     }
 
     return { error: null };

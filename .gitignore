@@ -1,7 +1,6 @@
 # env files — never commit
 .env
-.env.local
-.env*.local
+.env.*
 
 # dependencies
 node_modules/
@@ -22,6 +21,15 @@ supabase/.temp/
 # misc
 .DS_Store
 *.pem
+
+# build artifacts
+*.tsbuildinfo
+
+# dev scripts
+scripts/
+
+# temp planning files
+pages.md
 
 # Claude Code
 .claude/

@@ -120,5 +120,3 @@ export default async function ProgramPage({
     />
   )
 }
-  )
-}

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, UserRound, UserCog, Layers,
-  Calendar, ClipboardCheck, CreditCard, Inbox,
+  Calendar, ClipboardCheck, CreditCard, Inbox, Receipt,
   TrendingDown, BarChart2, Bell, Settings,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -18,6 +18,7 @@ const navItems = [
   { href: '/program', label: 'Program', icon: Calendar },
   { href: '/yoklama', label: 'Yoklama', icon: ClipboardCheck },
   { href: '/aidat', label: 'Aidat', icon: CreditCard },
+  { href: '/dekontlar', label: 'Dekontlar', icon: Receipt },
   { href: '/basvurular', label: 'Başvurular', icon: Inbox },
   { href: '/giderler', label: 'Giderler', icon: TrendingDown },
   { href: '/raporlar', label: 'Raporlar', icon: BarChart2 },

@@ -45,3 +45,19 @@ export async function createParent(data: {
 
   revalidatePath('/veliler')
 }
+
+export async function deleteParent(parentId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Oturum bulunamadı')
+
+  // Önce parent_student bağlantılarını sil (FK engelini kaldır)
+  await supabase.from('parent_student').delete().eq('parent_profile_id', parentId)
+
+  // Auth kullanıcısını sil (profiles CASCADE ile silinir)
+  const admin = createAdminClient()
+  const { error } = await admin.auth.admin.deleteUser(parentId)
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/veliler')
+}

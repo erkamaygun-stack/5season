@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import AddExpenseModal from '@/components/giderler/add-expense-modal'
 
 const CATEGORY_LABELS: Record<string, string> = {
   rent: 'Kira', salary: 'Maaş', utility: 'Fatura',
-  equipment: 'Malzeme', other: 'Diğer',
+  equipment: 'Malzeme', tax: 'Vergi', other: 'Diğer',
 }
 
 export default async function GiderlerPage() {
@@ -23,7 +24,10 @@ export default async function GiderlerPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-gray-900">Giderler</h1>
-        <span className="text-sm text-gray-500">Toplam: <span className="font-semibold text-gray-900">{formatCurrency(total)}</span></span>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-gray-500">Toplam: <span className="font-semibold text-gray-900">{formatCurrency(total)}</span></span>
+          <AddExpenseModal />
+        </div>
       </div>
 
       <div className="rounded-lg border bg-white overflow-hidden">

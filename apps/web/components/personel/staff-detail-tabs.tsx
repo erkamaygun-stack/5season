@@ -3,7 +3,6 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,14 +11,15 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatCurrency, formatDate, getMonthName, TR_MONTHS } from '@/lib/utils'
-import { Pencil, Banknote } from 'lucide-react'
-import { paySalary } from '@/app/(admin)/personel/actions'
+import { Pencil, Banknote, Trash2 } from 'lucide-react'
+import { PhoneInput } from '@/components/ui/phone-input'
+import { paySalary, updateStaff, deleteStaff } from '@/app/(admin)/personel/actions'
 
 const TYPE_LABEL: Record<string, string> = { coach: 'Antrenör', assistant: 'Asistan', other: 'Diğer' }
 const PAYMENT_METHOD_LABEL: Record<string, string> = {
   cash: 'Nakit',
   transfer: 'Havale / EFT',
-  credit_card: 'Kredi Kartı',
+  other: 'Diğer',
 }
 
 interface StaffMember {
@@ -69,25 +69,22 @@ function EditStaffModal({
   const [staffType, setStaffType] = useState(staff.staff_type)
   const [monthlySalary, setMonthlySalary] = useState(String(staff.monthly_salary ?? ''))
   const [isActive, setIsActive] = useState(staff.is_active ?? true)
+  const [phone, setPhone] = useState((staff.phone ?? '').replace(/^\+90/, ''))
   const [loading, setLoading] = useState(false)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!fullName.trim()) return
     setLoading(true)
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('staff')
-      .update({
+    try {
+      await updateStaff(staff.id, {
         full_name: fullName.trim(),
         staff_type: staffType,
         monthly_salary: monthlySalary ? Number(monthlySalary) : null,
         is_active: isActive,
-      } as any)
-      .eq('id', staff.id)
-    if (error) {
-      toast.error('Kaydedilemedi: ' + error.message)
-    } else {
+        phone: phone || undefined,
+        profile_id: staff.profile_id || undefined,
+      })
       toast.success('Personel bilgileri güncellendi')
       onSuccess({
         full_name: fullName.trim(),
@@ -95,6 +92,8 @@ function EditStaffModal({
         monthly_salary: monthlySalary ? Number(monthlySalary) : null,
         is_active: isActive,
       })
+    } catch (err: any) {
+      toast.error('Kaydedilemedi: ' + (err.message ?? 'Bilinmeyen hata'))
     }
     setLoading(false)
   }
@@ -124,6 +123,10 @@ function EditStaffModal({
           <div className="space-y-1.5">
             <Label>Aylık Maaş (₺)</Label>
             <Input type="number" value={monthlySalary} onChange={(e) => setMonthlySalary(e.target.value)} min={0} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Telefon</Label>
+            <PhoneInput value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="5xxxxxxxxx" />
           </div>
           <div className="space-y-1.5">
             <Label>Durum</Label>
@@ -231,7 +234,7 @@ function PaySalaryModal({
               <SelectContent>
                 <SelectItem value="cash">Nakit</SelectItem>
                 <SelectItem value="transfer">Havale / EFT</SelectItem>
-                <SelectItem value="credit_card">Kredi Kartı</SelectItem>
+                <SelectItem value="other">Diğer</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -266,6 +269,19 @@ export default function StaffDetailTabs({
   const [payments] = useState(initialPayments)
   const [editModal, setEditModal] = useState(false)
   const [payModal, setPayModal] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDelete() {
+    if (!confirm(`${staff.full_name} kalıcı olarak silinsin mi? Bu işlem geri alınamaz.`)) return
+    setDeleting(true)
+    try {
+      await deleteStaff(staff.id, staff.profile_id || undefined)
+      router.push('/personel')
+    } catch (err: any) {
+      toast.error(err.message ?? 'Silinemedi')
+      setDeleting(false)
+    }
+  }
 
   return (
     <>
@@ -289,6 +305,10 @@ export default function StaffDetailTabs({
                 <Button size="sm" onClick={() => setPayModal(true)}>
                   <Banknote className="w-3.5 h-3.5 mr-1.5" />
                   Maaş Öde
+                </Button>
+                <Button size="sm" variant="destructive" onClick={handleDelete} disabled={deleting}>
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                  {deleting ? 'Siliniyor…' : 'Profili Sil'}
                 </Button>
               </div>
             </div>

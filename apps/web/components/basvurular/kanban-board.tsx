@@ -1,11 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { PhoneInput } from '@/components/ui/phone-input'
 import { formatDate } from '@/lib/utils'
+import { createApplication } from '@/app/(admin)/basvurular/actions'
+import { Plus } from 'lucide-react'
 
 interface Application {
   id: string; applicant_full_name: string; parent_phone: string
@@ -19,10 +26,83 @@ interface Props {
   columns: Column[]
 }
 
+function AddApplicationModal({ onClose, onAdded }: { onClose: () => void; onAdded: (app: Application) => void }) {
+  const [applicantName, setApplicantName] = useState('')
+  const [birthDate, setBirthDate] = useState('')
+  const [parentName, setParentName] = useState('')
+  const [parentPhone, setParentPhone] = useState('')
+  const [source, setSource] = useState('')
+  const [notes, setNotes] = useState('')
+  const [isPending, startTransition] = useTransition()
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!applicantName.trim() || !parentName.trim() || !parentPhone.trim()) return
+    startTransition(async () => {
+      try {
+        const inserted = await createApplication({
+          applicant_full_name: applicantName,
+          birth_date: birthDate || undefined,
+          parent_full_name: parentName,
+          parent_phone: parentPhone,
+          source: source || undefined,
+          notes: notes || undefined,
+        })
+        toast.success('Başvuru oluşturuldu')
+        onAdded(inserted as Application)
+        onClose()
+      } catch (err: any) {
+        toast.error(err.message ?? 'Başvuru oluşturulamadı')
+      }
+    })
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Yeni Başvuru</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Öğrenci Adı Soyadı *</Label>
+            <Input value={applicantName} onChange={(e) => setApplicantName(e.target.value)} required placeholder="Ad Soyad" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Doğum Tarihi</Label>
+            <Input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Veli Adı Soyadı *</Label>
+            <Input value={parentName} onChange={(e) => setParentName(e.target.value)} required placeholder="Ad Soyad" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Veli Telefonu *</Label>
+            <PhoneInput value={parentPhone} onChange={(e) => setParentPhone(e.target.value)} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Kaynak</Label>
+            <Input value={source} onChange={(e) => setSource(e.target.value)} placeholder="Instagram, tavsiye, vb." />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Notlar</Label>
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="İsteğe bağlı" />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>İptal</Button>
+            <Button type="submit" disabled={isPending}>{isPending ? 'Kaydediliyor…' : 'Kaydet'}</Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function KanbanBoard({ applications: initial, columns }: Props) {
   const router = useRouter()
   const [apps, setApps] = useState(initial)
   const [dragging, setDragging] = useState<string | null>(null)
+  const [addModal, setAddModal] = useState(false)
 
   async function moveCard(id: string, newStatus: string) {
     const prev = apps.find((a) => a.id === id)
@@ -52,6 +132,14 @@ export default function KanbanBoard({ applications: initial, columns }: Props) {
   }
 
   return (
+    <>
+    <div className="flex items-center justify-between mb-4">
+      <div /> {/* spacer */}
+      <Button size="sm" onClick={() => setAddModal(true)}>
+        <Plus className="w-4 h-4 mr-1" />
+        Yeni Başvuru
+      </Button>
+    </div>
     <div className="flex gap-3 overflow-x-auto pb-4">
       {columns.map((col) => {
         const cards = apps.filter((a) => a.status === col.status)
@@ -88,5 +176,13 @@ export default function KanbanBoard({ applications: initial, columns }: Props) {
         )
       })}
     </div>
+
+    {addModal && (
+      <AddApplicationModal
+        onClose={() => setAddModal(false)}
+        onAdded={(app) => setApps((prev) => [app, ...prev])}
+      />
+    )}
+    </>
   )
 }

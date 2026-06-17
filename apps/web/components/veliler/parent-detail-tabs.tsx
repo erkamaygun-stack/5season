@@ -13,7 +13,8 @@ import { PhoneInput } from '@/components/ui/phone-input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatCurrency, formatDate, getMonthName } from '@/lib/utils'
-import { Pencil, Smartphone } from 'lucide-react'
+import { Pencil, Smartphone, Trash2 } from 'lucide-react'
+import { deleteParent } from '@/app/(admin)/veliler/actions'
 
 interface AidatInvoice {
   id: string
@@ -131,6 +132,7 @@ function EditParentModal({
 export default function ParentDetailTabs({ parent, debtByStudent }: Props) {
   const router = useRouter()
   const [editModal, setEditModal] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [info, setInfo] = useState({
     full_name: parent.full_name,
     phone: parent.phone ?? '',
@@ -149,6 +151,18 @@ export default function ParentDetailTabs({ parent, debtByStudent }: Props) {
 
   function handleInvite() {
     toast.info('SMS davet henüz aktif değil. WhatsApp entegrasyonu onaylandığında etkinleştirilecek.')
+  }
+
+  async function handleDelete() {
+    if (!confirm(`${info.full_name} kalıcı olarak silinsin mi? Bu işlem geri alınamaz.`)) return
+    setDeleting(true)
+    try {
+      await deleteParent(parent.id)
+      router.push('/veliler')
+    } catch (err: any) {
+      toast.error(err.message ?? 'Silinemedi')
+      setDeleting(false)
+    }
   }
 
   return (
@@ -177,6 +191,10 @@ export default function ParentDetailTabs({ parent, debtByStudent }: Props) {
                 <Button size="sm" variant="outline" onClick={handleInvite}>
                   <Smartphone className="w-3.5 h-3.5 mr-1.5" />
                   Davet Et
+                </Button>
+                <Button size="sm" variant="destructive" onClick={handleDelete} disabled={deleting}>
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                  {deleting ? 'Siliniyor…' : 'Profili Sil'}
                 </Button>
               </div>
             </div>

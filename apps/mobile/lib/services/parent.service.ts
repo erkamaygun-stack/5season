@@ -339,7 +339,12 @@ export async function uploadPaymentReceipt(params: {
   if (result.canceled || !result.assets?.[0]) return { cancelled: true, error: null };
 
   const imageUri = result.assets[0].uri;
-  const fileName = `${params.schoolId}/${params.studentId}/${Date.now()}.jpg`;
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { cancelled: false, error: 'Oturum bulunamadı.' };
+
+  // RLS: (storage.foldername(name))[1] = auth.uid() — ilk klasör userId olmalı
+  const fileName = `${user.id}/${Date.now()}.jpg`;
 
   try {
     const response = await fetch(imageUri);
@@ -351,17 +356,16 @@ export async function uploadPaymentReceipt(params: {
 
     if (uploadError) return { cancelled: false, error: 'Dekont yüklenemedi. Lütfen tekrar deneyin.' };
 
-    const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(fileName);
-
+    // Bucket private: dosya yolunu saklıyoruz, admin paneli signed URL üretir
     const { error: paymentError } = await supabase.from('payments').insert({
       school_id: params.schoolId,
       student_id: params.studentId,
       invoice_type: params.invoiceType,
       invoice_id: params.invoiceId,
       amount: 0,
-      payment_method: 'parent_receipt',
-      receipt_url: urlData.publicUrl,
-    });
+      payment_method: 'other',
+      receipt_url: fileName,
+    } as any);
 
     if (paymentError) return { cancelled: false, error: 'Kayıt oluşturulamadı.' };
     return { cancelled: false, error: null };

@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatDate, formatCurrency, getMonthName } from '@/lib/utils'
 import { Upload, Plus, Trash2, UserPlus, Download, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
+import { deleteStudent } from '@/app/(admin)/ogrenciler/actions'
 
 interface Props {
   student: any
@@ -38,6 +39,19 @@ export default function StudentDetailTabs({
   const router = useRouter()
   const [notes, setNotes] = useState<string>(student.notes ?? '')
   const [savingNotes, setSavingNotes] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDelete() {
+    if (!confirm(`${student.full_name} kalıcı olarak silinsin mi? Bu işlem geri alınamaz.`)) return
+    setDeleting(true)
+    try {
+      await deleteStudent(student.id)
+      router.push('/ogrenciler')
+    } catch (err: any) {
+      toast.error(err.message ?? 'Silinemedi')
+      setDeleting(false)
+    }
+  }
   const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear())
   const [paymentModal, setPaymentModal] = useState<any | null>(null)
   const [addParentModal, setAddParentModal] = useState(false)
@@ -46,6 +60,9 @@ export default function StudentDetailTabs({
   const [signingDoc, setSigningDoc] = useState<string | null>(null)
   const [parents, setParents] = useState<any[]>(student.parent_student ?? [])
   const [studentGroups, setStudentGroups] = useState<any[]>(student.student_groups ?? [])
+  const [equipInvoices, setEquipInvoices] = useState<any[]>(equipmentInvoices)
+  const [equipPayModal, setEquipPayModal] = useState<any | null>(null)
+  const [addEquipModal, setAddEquipModal] = useState(false)
 
   const activeGroup = studentGroups.find((sg: any) => sg.is_active)
 
@@ -138,6 +155,23 @@ export default function StudentDetailTabs({
     }
   }
 
+  // ── Equipment management ──────────────────────────────────────────────────
+  async function markEquipDelivered(invId: string) {
+    const today = new Date().toISOString().split('T')[0]
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('equipment_invoices')
+      .update({ delivered: true, delivered_at: today } as any)
+      .eq('id', invId)
+    if (error) toast.error('İşlem başarısız')
+    else {
+      toast.success('Teslim edildi olarak işaretlendi')
+      setEquipInvoices((prev) =>
+        prev.map((i) => i.id === invId ? { ...i, delivered: true, delivered_at: today } : i)
+      )
+    }
+  }
+
   // ── Attendance helpers ────────────────────────────────────────────────────
   const attendanceByDate: Record<string, string> = {}
   for (const ar of attendance) {
@@ -170,10 +204,16 @@ export default function StudentDetailTabs({
           <div className="rounded-lg border bg-white overflow-hidden">
             <div className="flex items-center justify-between px-6 py-3 border-b bg-gray-50">
               <span className="text-sm font-medium text-gray-700">Genel Bilgiler</span>
-              <Button size="sm" variant="outline" onClick={() => setEditModal(true)}>
-                <Pencil className="w-3.5 h-3.5 mr-1.5" />
-                Düzenle
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => setEditModal(true)}>
+                  <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                  Düzenle
+                </Button>
+                <Button size="sm" variant="destructive" onClick={handleDelete} disabled={deleting}>
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                  {deleting ? 'Siliniyor…' : 'Profili Sil'}
+                </Button>
+              </div>
             </div>
             <div className="p-6 space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
@@ -503,7 +543,14 @@ export default function StudentDetailTabs({
         {/* ── FORMA / EŞOFMAN ───────────────────────────────────────────── */}
         <TabsContent value="forma">
           <div className="rounded-lg border bg-white overflow-hidden">
-            {equipmentInvoices.length === 0 ? (
+            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
+              <span className="text-sm font-medium text-gray-700">Forma / Eşofman</span>
+              <Button size="sm" variant="outline" onClick={() => setAddEquipModal(true)}>
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                Fatura Ekle
+              </Button>
+            </div>
+            {equipInvoices.length === 0 ? (
               <p className="p-6 text-sm text-gray-400">Forma / eşofman kaydı yok.</p>
             ) : (
               <table className="min-w-full text-sm divide-y">
@@ -512,13 +559,13 @@ export default function StudentDetailTabs({
                     <th className="px-4 py-3 text-left font-medium text-gray-600">Açıklama</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-600">Tutar</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-600">Ödenen</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Ödeme</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">Ödeme Durumu</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-600">Teslim</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Teslim Tarihi</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">İşlemler</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {equipmentInvoices.map((inv: any) => (
+                  {equipInvoices.map((inv: any) => (
                     <tr key={inv.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-medium">{inv.description ?? 'Forma'}</td>
                       <td className="px-4 py-3">{formatCurrency(inv.amount)}</td>
@@ -526,11 +573,9 @@ export default function StudentDetailTabs({
                       <td className="px-4 py-3">
                         <Badge
                           variant={
-                            inv.status === 'paid'
-                              ? 'success'
-                              : inv.status === 'partial'
-                              ? 'warning'
-                              : 'destructive'
+                            inv.status === 'paid' ? 'success'
+                            : inv.status === 'partial' ? 'warning'
+                            : 'destructive'
                           }
                         >
                           {inv.status === 'paid' ? 'Ödendi' : inv.status === 'partial' ? 'Kısmi' : 'Bekliyor'}
@@ -538,11 +583,32 @@ export default function StudentDetailTabs({
                       </td>
                       <td className="px-4 py-3">
                         {inv.delivered
-                          ? <Badge variant="success">Teslim Edildi</Badge>
-                          : <Badge variant="secondary">Teslim Edilmedi</Badge>}
+                          ? <span className="text-xs text-green-600 font-medium">{inv.delivered_at ? formatDate(inv.delivered_at) : 'Teslim Edildi'}</span>
+                          : <span className="text-xs text-gray-400">Teslim Edilmedi</span>}
                       </td>
-                      <td className="px-4 py-3 text-gray-500">
-                        {inv.delivered_at ? formatDate(inv.delivered_at) : '-'}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          {inv.status !== 'paid' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={() => setEquipPayModal(inv)}
+                            >
+                              Ödeme Al
+                            </Button>
+                          )}
+                          {!inv.delivered && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={() => markEquipDelivered(inv.id)}
+                            >
+                              Teslim Et
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -648,6 +714,21 @@ export default function StudentDetailTabs({
         open={editModal}
         onClose={() => setEditModal(false)}
         onSuccess={() => { setEditModal(false); router.refresh() }}
+      />
+      <EquipPaymentModal
+        invoice={equipPayModal}
+        studentId={student.id}
+        onClose={() => setEquipPayModal(null)}
+        onSuccess={(updatedInv) => {
+          setEquipInvoices((prev) => prev.map((i) => i.id === updatedInv.id ? { ...i, ...updatedInv } : i))
+          setEquipPayModal(null)
+        }}
+      />
+      <AddEquipmentModal
+        studentId={student.id}
+        open={addEquipModal}
+        onClose={() => setAddEquipModal(false)}
+        onSuccess={(inv) => { setEquipInvoices((prev) => [...prev, inv]); setAddEquipModal(false) }}
       />
     </>
   )
@@ -1098,6 +1179,167 @@ function EditStudentModal({
             <Button type="submit" disabled={loading}>
               {loading ? 'Kaydediliyor…' : 'Kaydet'}
             </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ============================================================================
+// EQUIPMENT PAYMENT MODAL
+// ============================================================================
+function EquipPaymentModal({
+  invoice,
+  studentId,
+  onClose,
+  onSuccess,
+}: {
+  invoice: any | null
+  studentId: string
+  onClose: () => void
+  onSuccess: (updated: any) => void
+}) {
+  const [amount, setAmount] = useState('')
+  const [method, setMethod] = useState('nakit')
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (invoice) {
+      setAmount(String(Math.max(0, (invoice.amount ?? 0) - (invoice.paid_amount ?? 0))))
+      setMethod('nakit')
+    }
+  }, [invoice?.id])
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    const amt = parseFloat(amount)
+    if (!amt || amt <= 0) return
+    setLoading(true)
+    const supabase = createClient()
+    const { data: schoolData } = await supabase.from('schools').select('id').limit(1).single()
+    const { error } = await supabase.from('payments').insert({
+      student_id: studentId,
+      school_id: schoolData?.id ?? '',
+      invoice_type: 'equipment',
+      invoice_id: invoice.id,
+      amount: amt,
+      payment_method: method,
+      payment_date: new Date().toISOString().split('T')[0],
+    })
+    if (error) { toast.error('Ödeme kaydedilemedi: ' + error.message); setLoading(false); return }
+
+    // Local state güncelle — trigger invoice'ı DB'de güncelliyor, router.refresh() gereksiz
+    const newPaid = (invoice.paid_amount ?? 0) + amt
+    const newStatus = newPaid >= invoice.amount ? 'paid' : newPaid > 0 ? 'partial' : 'pending'
+    toast.success('Ödeme kaydedildi')
+    onSuccess({ ...invoice, paid_amount: newPaid, status: newStatus })
+    setLoading(false)
+  }
+
+  const remaining = invoice ? (invoice.amount ?? 0) - (invoice.paid_amount ?? 0) : 0
+
+  return (
+    <Dialog open={!!invoice} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Ödeme Al — Ekipman</DialogTitle>
+        </DialogHeader>
+        {invoice && (
+          <>
+            <p className="text-sm text-gray-500 -mt-1">
+              {invoice.description ?? 'Forma'} — Kalan:{' '}
+              <strong className="text-gray-900">{formatCurrency(remaining)}</strong>
+            </p>
+            <form onSubmit={submit} className="space-y-3 mt-1">
+              <div className="space-y-1.5">
+                <Label>Tutar (₺)</Label>
+                <Input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Ödeme Yöntemi</Label>
+                <Select value={method} onValueChange={setMethod}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="nakit">Nakit</SelectItem>
+                    <SelectItem value="kart">Kredi / Banka Kartı</SelectItem>
+                    <SelectItem value="havale">Havale / EFT</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button type="button" variant="outline" onClick={onClose}>İptal</Button>
+                <Button type="submit" disabled={loading}>{loading ? 'Kaydediliyor…' : 'Kaydet'}</Button>
+              </div>
+            </form>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ============================================================================
+// ADD EQUIPMENT INVOICE MODAL
+// ============================================================================
+function AddEquipmentModal({
+  studentId,
+  open,
+  onClose,
+  onSuccess,
+}: {
+  studentId: string
+  open: boolean
+  onClose: () => void
+  onSuccess: (inv: any) => void
+}) {
+  const [description, setDescription] = useState('Forma + Eşofman')
+  const [amount, setAmount] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    const amt = parseFloat(amount)
+    if (!amt || amt <= 0) return
+    setLoading(true)
+    const supabase = createClient()
+    const { data: schoolData } = await supabase.from('schools').select('id').limit(1).single()
+    const { data, error } = await supabase
+      .from('equipment_invoices')
+      .insert({
+        school_id: schoolData?.id ?? '',
+        student_id: studentId,
+        description: description.trim() || 'Forma + Eşofman',
+        amount: amt,
+      })
+      .select()
+      .single()
+    if (error) { toast.error('Fatura eklenemedi: ' + error.message); setLoading(false); return }
+    toast.success('Fatura eklendi')
+    onSuccess(data)
+    setDescription('Forma + Eşofman')
+    setAmount('')
+    setLoading(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Ekipman Faturası Ekle</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-3 mt-1">
+          <div className="space-y-1.5">
+            <Label>Açıklama</Label>
+            <Input value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Tutar (₺)</Label>
+            <Input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" onClick={onClose}>İptal</Button>
+            <Button type="submit" disabled={loading}>{loading ? 'Kaydediliyor…' : 'Ekle'}</Button>
           </div>
         </form>
       </DialogContent>
