@@ -2,10 +2,15 @@ import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { formatCurrency, getMonthName, TR_MONTHS, nMonthsAgo } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Upload } from 'lucide-react'
 import AidatGrid from '@/components/aidat/aidat-grid'
 import DekontlarClient from '../dekontlar/dekontlar-client'
 import AddExpenseModal from '@/components/giderler/add-expense-modal'
 import GiderlerClient from '@/components/giderler/giderler-client'
+import AddStaffModal from '@/components/personel/add-staff-modal'
+import StaffTable from '@/components/personel/staff-table'
+import StaffFilters from '@/components/personel/staff-filters'
 import FinansTabNav from './tab-nav'
 
 type Tab = 'aidat' | 'dekontlar' | 'giderler' | 'raporlar'
@@ -13,10 +18,10 @@ type Tab = 'aidat' | 'dekontlar' | 'giderler' | 'raporlar'
 export default async function FinansPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; year?: string }>
+  searchParams: Promise<{ tab?: string; year?: string; search?: string; type?: string; active?: string }>
 }) {
   const supabase = await createClient()
-  const { tab: tabParam = 'aidat', year: yearParam } = await searchParams
+  const { tab: tabParam = 'aidat', year: yearParam, search, type, active } = await searchParams
   const tab = (['aidat', 'dekontlar', 'giderler', 'raporlar'].includes(tabParam) ? tabParam : 'aidat') as Tab
 
   // Bekleyen dekont sayısı — her tab'da göster
@@ -119,6 +124,59 @@ export default async function FinansPage({
     }
   }
 
+  // ── Personel (Giderler sekmesi içinde) ────────────────────────────────────
+  let personelContent = null
+  if (tab === 'giderler') {
+    let staffQuery = supabase
+      .from('staff')
+      .select('id, full_name, staff_type, monthly_salary, is_active')
+      .order('full_name')
+
+    if (search) staffQuery = staffQuery.ilike('full_name', `%${search}%`)
+    if (type) staffQuery = staffQuery.eq('staff_type', type)
+    if (active === 'active') staffQuery = staffQuery.eq('is_active', true)
+    if (active === 'inactive') staffQuery = staffQuery.eq('is_active', false)
+
+    const { data: staffData } = await staffQuery
+    const { data: staffGroupsData } = await supabase
+      .from('groups')
+      .select('id, name, primary_coach_id')
+      .eq('is_active', true)
+
+    const staffGroups: Record<string, string[]> = {}
+    for (const g of staffGroupsData ?? []) {
+      if ((g as any).primary_coach_id) {
+        const coachId = (g as any).primary_coach_id as string
+        if (!staffGroups[coachId]) staffGroups[coachId] = []
+        staffGroups[coachId].push(g.name)
+      }
+    }
+
+    const personelData = (staffData ?? []).map((s) => ({
+      ...s,
+      groups: staffGroups[s.id] ?? [],
+    }))
+
+    personelContent = (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-foreground">
+            Personel <span className="font-normal text-muted-foreground text-sm">({personelData.length})</span>
+          </h2>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" disabled title="V1.1'de eklenecek">
+              <Upload className="w-4 h-4 mr-1.5" />
+              Excel Import
+            </Button>
+            <AddStaffModal />
+          </div>
+        </div>
+        <StaffFilters />
+        <StaffTable staff={personelData} />
+      </div>
+    )
+  }
+
   // ── Giderler ───────────────────────────────────────────────────────────────
   let giderlerContent = null
   if (tab === 'giderler') {
@@ -132,6 +190,7 @@ export default async function FinansPage({
 
     giderlerContent = (
       <>
+        <h2 className="text-lg font-semibold text-foreground">Giderler</h2>
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">
             Toplam: <span className="font-semibold text-foreground">{formatCurrency(total)}</span>
@@ -239,6 +298,7 @@ export default async function FinansPage({
       <div className="space-y-4">
         {aidatContent}
         {dekontlarContent}
+        {personelContent}
         {giderlerContent}
         {raporlarContent}
       </div>
