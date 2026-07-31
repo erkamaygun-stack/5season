@@ -22,6 +22,8 @@ import {
   removeStudentFromGroup,
   deleteGroup,
 } from '@/app/(admin)/gruplar/actions'
+import YoklamaClient from '@/app/(admin)/yoklama/yoklama-client'
+import LeaveRequestsSection from '@/app/(admin)/yoklama/leave-requests-section'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -368,11 +370,17 @@ export default function GrupDetailTabs({
   sessions,
   coaches,
   allStudents,
+  todaySessions,
+  groupStudentMap,
+  leaveRequests,
 }: {
   group: Group
   sessions: Session[]
   coaches: Coach[]
   allStudents: Student[]
+  todaySessions: any[]
+  groupStudentMap: Record<string, { id: string; full_name: string }[]>
+  leaveRequests: any[]
 }) {
   const router = useRouter()
   const [group, setGroup] = useState(initialGroup)
@@ -462,6 +470,9 @@ export default function GrupDetailTabs({
       <Tabs defaultValue="genel" className="w-full">
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="genel">Genel</TabsTrigger>
+          <TabsTrigger value="bugun">
+            Bugünkü Yoklama {todaySessions.length > 0 ? `(${todaySessions.length})` : ''}
+          </TabsTrigger>
           <TabsTrigger value="program">Program ({slots.length})</TabsTrigger>
           <TabsTrigger value="yoklama">
             Yoklama Geçmişi ({normalSessions.length})
@@ -582,6 +593,20 @@ export default function GrupDetailTabs({
                 </tbody>
               </table>
             )}
+          </div>
+        </TabsContent>
+
+        {/* ── BUGÜNKÜ YOKLAMA ──────────────────────────────────────────────── */}
+        <TabsContent value="bugun">
+          {todaySessions.length === 0 ? (
+            <div className="rounded-lg border bg-card p-12 text-center text-sm text-muted-foreground">
+              Bugün bu grup için planlanmış antrenman yok.
+            </div>
+          ) : (
+            <YoklamaClient sessions={todaySessions as any} groupStudentMap={groupStudentMap} />
+          )}
+          <div className="mt-6">
+            <LeaveRequestsSection items={leaveRequests as any} />
           </div>
         </TabsContent>
 

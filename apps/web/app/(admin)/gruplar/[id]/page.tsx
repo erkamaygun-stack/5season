@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { today } from '@/lib/utils'
 import GrupDetailTabs from '@/components/gruplar/grup-detail-tabs'
 
 export default async function GrupDetailPage({
@@ -9,8 +10,9 @@ export default async function GrupDetailPage({
 }) {
   const { id } = await params
   const supabase = await createClient()
+  const todayStr = today()
 
-  const [{ data: group }, { data: sessions }, { data: coaches }, { data: allStudents }] =
+  const [{ data: group }, { data: sessions }, { data: coaches }, { data: allStudents }, { data: todaySessionsRaw }] =
     await Promise.all([
       supabase
         .from('groups')
@@ -39,9 +41,35 @@ export default async function GrupDetailPage({
         .select('id, full_name, status')
         .eq('status', 'active')
         .order('full_name'),
+      supabase
+        .from('attendance_sessions')
+        .select(
+          'id, start_time, end_time, status, group_id, groups(name), attendance_records(id, status, student_id, students(full_name))',
+        )
+        .eq('group_id', id)
+        .eq('session_date', todayStr)
+        .order('start_time'),
     ])
 
   if (!group) notFound()
+
+  const activeStudentGroups = ((group as any).student_groups ?? []).filter(
+    (sg: any) => sg.is_active && sg.students,
+  )
+  const groupStudentMap: Record<string, { id: string; full_name: string }[]> = {
+    [id]: activeStudentGroups.map((sg: any) => ({ id: sg.students.id, full_name: sg.students.full_name })),
+  }
+
+  const activeStudentIds = activeStudentGroups.map((sg: any) => sg.students.id)
+  const { data: leaveRequestsRaw } = activeStudentIds.length
+    ? await supabase
+        .from('leave_requests')
+        .select('id, session_date, reason, status, students(full_name)')
+        .in('student_id', activeStudentIds)
+        .in('status', ['submitted', 'seen'])
+        .gte('session_date', todayStr)
+        .order('session_date')
+    : { data: [] as any[] }
 
   return (
     <div>
@@ -54,6 +82,9 @@ export default async function GrupDetailPage({
         sessions={sessions ?? []}
         coaches={coaches ?? []}
         allStudents={allStudents ?? []}
+        todaySessions={(todaySessionsRaw ?? []) as any}
+        groupStudentMap={groupStudentMap}
+        leaveRequests={(leaveRequestsRaw ?? []) as any}
       />
     </div>
   )
