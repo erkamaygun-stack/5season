@@ -43,3 +43,13 @@ export async function createApplication(data: {
   revalidatePath('/basvurular')
   return inserted
 }
+
+export async function deleteApplication(id: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Oturum bulunamadı')
+
+  const { error } = await supabase.from('applications').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/basvurular')
+}

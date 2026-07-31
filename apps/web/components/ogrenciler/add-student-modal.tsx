@@ -1,7 +1,7 @@
 'use client'
-// useState, form submit için
+// useState, useEffect: form state ve enrollment_date client-side init için
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -22,12 +22,17 @@ export default function AddStudentModal({ groups }: { groups: Group[] }) {
     birth_date: '',
     gender: '',
     blood_type: '',
-    enrollment_date: new Date().toISOString().split('T')[0],
+    enrollment_date: '',
     group_id: '',
     notes: '',
     parent_name: '',
     parent_phone: '',
   })
+
+  // new Date() server ile client arasında timezone farkı yaratıyor; useEffect'te set ediyoruz
+  useEffect(() => {
+    setForm((f) => ({ ...f, enrollment_date: new Date().toISOString().split('T')[0] }))
+  }, [])
 
   function set(key: string, value: string) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -53,7 +58,7 @@ export default function AddStudentModal({ groups }: { groups: Group[] }) {
       setOpen(false)
       setForm({
         full_name: '', birth_date: '', gender: '', blood_type: '',
-        enrollment_date: new Date().toISOString().split('T')[0],
+        enrollment_date: new Date().toISOString().split('T')[0], // submit sırasında çalışır, SSR'da değil
         group_id: '', notes: '', parent_name: '', parent_phone: '',
       })
     } catch (err: any) {
@@ -65,8 +70,8 @@ export default function AddStudentModal({ groups }: { groups: Group[] }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button><Plus className="w-4 h-4" /> Öğrenci Ekle</Button>
+      <DialogTrigger render={<Button />}>
+        <Plus className="w-4 h-4" /> Öğrenci Ekle
       </DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader>

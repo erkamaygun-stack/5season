@@ -6,7 +6,7 @@ export default async function BildirimSablonlariPage() {
 
   const { data: templates } = await supabase
     .from('notification_templates')
-    .select('id, name, body, trigger_event, created_at')
+    .select('id, code, body_template, created_at')
     .order('created_at', { ascending: false })
 
   return (
@@ -27,19 +27,14 @@ export default async function BildirimSablonlariPage() {
             <div key={t.id} className="bg-white rounded-lg border p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="font-semibold text-gray-900">{t.name}</p>
-                  {t.trigger_event && (
-                    <span className="inline-block mt-1 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                      {t.trigger_event}
-                    </span>
-                  )}
+                  <p className="font-semibold text-gray-900">{t.code}</p>
                 </div>
                 <p className="text-xs text-gray-400 flex-shrink-0">
-                  {new Date(t.created_at).toLocaleDateString('tr-TR')}
+                  {t.created_at ? new Date(t.created_at).toLocaleDateString('tr-TR') : '-'}
                 </p>
               </div>
-              {t.body && (
-                <p className="mt-3 text-sm text-gray-600 leading-relaxed">{t.body}</p>
+              {t.body_template && (
+                <p className="mt-3 text-sm text-gray-600 leading-relaxed">{t.body_template}</p>
               )}
             </div>
           ))}

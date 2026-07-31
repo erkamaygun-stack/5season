@@ -34,19 +34,19 @@ export default function AidatGrid({ students, invoiceMap, year }: Props) {
     <>
       <div className="flex items-center gap-3 mb-4">
         <Button variant="outline" size="icon" onClick={() => changeYear(-1)}><ChevronLeft className="w-4 h-4" /></Button>
-        <span className="font-semibold text-gray-900 w-12 text-center">{year}</span>
+        <span className="font-semibold text-foreground w-12 text-center">{year}</span>
         <Button variant="outline" size="icon" onClick={() => changeYear(1)}><ChevronRight className="w-4 h-4" /></Button>
       </div>
 
-      <div className="rounded-lg border bg-white overflow-auto">
+      <div className="rounded-lg border bg-card overflow-auto">
         <table className="text-sm border-collapse">
           <thead>
-            <tr className="bg-gray-50">
-              <th className="sticky left-0 z-10 bg-gray-50 px-4 py-3 text-left font-medium text-gray-600 min-w-[180px] border-b border-r">
+            <tr className="bg-muted/50">
+              <th className="sticky left-0 z-10 bg-muted/50 px-4 py-3 text-left font-medium text-muted-foreground min-w-[180px] border-b border-r">
                 Öğrenci
               </th>
               {TR_MONTHS.map((m, i) => (
-                <th key={i} className="px-3 py-3 text-center font-medium text-gray-600 min-w-[80px] border-b">
+                <th key={i} className="px-3 py-3 text-center font-medium text-muted-foreground min-w-[80px] border-b">
                   {m.slice(0, 3)}
                 </th>
               ))}
@@ -54,8 +54,8 @@ export default function AidatGrid({ students, invoiceMap, year }: Props) {
           </thead>
           <tbody>
             {students.map((student) => (
-              <tr key={student.id} className="hover:bg-gray-50">
-                <td className="sticky left-0 bg-white hover:bg-gray-50 px-4 py-2.5 font-medium text-gray-900 border-b border-r">
+              <tr key={student.id} className="hover:bg-muted/30">
+                <td className="sticky left-0 bg-card hover:bg-muted/30 px-4 py-2.5 font-medium text-foreground border-b border-r">
                   {student.full_name}
                 </td>
                 {Array.from({ length: 12 }, (_, i) => {

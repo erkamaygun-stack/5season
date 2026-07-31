@@ -15,7 +15,7 @@ export default async function GrupDetailPage({
       supabase
         .from('groups')
         .select(`
-          id, name, age_min, age_max, capacity, monthly_fee, is_active, primary_coach_id,
+          id, name, monthly_fee, is_active, primary_coach_id, color,
           staff(id, full_name),
           group_schedule_slots(id, day_of_week, start_time, end_time),
           student_groups(id, is_active, joined_at, left_at, students(id, full_name, status))
@@ -45,9 +45,9 @@ export default async function GrupDetailPage({
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">{(group as any).name}</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Grup Detayı</p>
+      <div className="space-y-2 mb-6">
+        <h1 className="text-3xl font-bold text-foreground">{(group as any).name}</h1>
+        <p className="text-sm text-muted-foreground">Grup Detayı</p>
       </div>
       <GrupDetailTabs
         group={group as any}

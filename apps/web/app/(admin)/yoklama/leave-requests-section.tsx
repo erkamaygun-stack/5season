@@ -38,7 +38,7 @@ export default function LeaveRequestsSection({ items }: { items: LeaveRequest[] 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <h2 className="text-base font-semibold text-gray-900">İzin Talepleri</h2>
+        <h2 className="text-base font-semibold text-foreground">İzin Talepleri</h2>
         {newCount > 0 && (
           <Badge variant="destructive" className="text-xs">
             {newCount} yeni
@@ -46,14 +46,14 @@ export default function LeaveRequestsSection({ items }: { items: LeaveRequest[] 
         )}
       </div>
 
-      <div className="rounded-lg border bg-white overflow-hidden">
+      <div className="rounded-lg border bg-card overflow-hidden">
         <div className="divide-y">
           {items.map((item) => (
             <div key={item.id} className="flex items-center gap-4 px-5 py-3">
-              <Bell className={`w-4 h-4 flex-shrink-0 ${item.status === 'submitted' ? 'text-orange-400' : 'text-gray-300'}`} />
+              <Bell className={`w-4 h-4 flex-shrink-0 ${item.status === 'submitted' ? 'text-orange-400' : 'text-muted-foreground/30'}`} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm text-gray-900">
+                  <span className="font-medium text-sm text-foreground">
                     {item.students?.full_name ?? '—'}
                   </span>
                   <Badge
@@ -63,7 +63,7 @@ export default function LeaveRequestsSection({ items }: { items: LeaveRequest[] 
                     {item.status === 'submitted' ? 'Yeni' : 'Görüldü'}
                   </Badge>
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   {formatDate(item.session_date)}
                   {item.reason ? ` — ${item.reason}` : ''}
                 </p>

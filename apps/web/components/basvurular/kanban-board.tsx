@@ -11,8 +11,8 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PhoneInput } from '@/components/ui/phone-input'
 import { formatDate } from '@/lib/utils'
-import { createApplication } from '@/app/(admin)/basvurular/actions'
-import { Plus } from 'lucide-react'
+import { createApplication, deleteApplication } from '@/app/(admin)/basvurular/actions'
+import { Plus, Trash2 } from 'lucide-react'
 
 interface Application {
   id: string; applicant_full_name: string; parent_phone: string
@@ -103,6 +103,21 @@ export default function KanbanBoard({ applications: initial, columns }: Props) {
   const [apps, setApps] = useState(initial)
   const [dragging, setDragging] = useState<string | null>(null)
   const [addModal, setAddModal] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  async function handleDelete(id: string, name: string) {
+    if (!confirm(`"${name}" başvurusu silinsin mi?`)) return
+    setDeletingId(id)
+    try {
+      await deleteApplication(id)
+      setApps((prev) => prev.filter((a) => a.id !== id))
+      toast.success('Başvuru silindi')
+    } catch (err: any) {
+      toast.error(err.message ?? 'Silinemedi')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   async function moveCard(id: string, newStatus: string) {
     const prev = apps.find((a) => a.id === id)
@@ -140,13 +155,13 @@ export default function KanbanBoard({ applications: initial, columns }: Props) {
         Yeni Başvuru
       </Button>
     </div>
-    <div className="flex gap-3 overflow-x-auto pb-4">
+    <div className="flex gap-3 overflow-x-auto pb-4 font-sans">
       {columns.map((col) => {
         const cards = apps.filter((a) => a.status === col.status)
         return (
           <div
             key={col.status}
-            className="flex-shrink-0 w-56 rounded-lg bg-gray-100 p-2"
+            className="flex-shrink-0 w-56 rounded-lg bg-muted p-2"
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault()
@@ -155,8 +170,8 @@ export default function KanbanBoard({ applications: initial, columns }: Props) {
             }}
           >
             <div className="flex items-center justify-between mb-2 px-1">
-              <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{col.label}</span>
-              <span className="text-xs text-gray-400">{cards.length}</span>
+              <span className="text-xs font-semibold text-muted-foreground tracking-wide">{col.label}</span>
+              <span className="text-xs text-muted-foreground/60">{cards.length}</span>
             </div>
             <div className="space-y-2">
               {cards.map((app) => (
@@ -164,11 +179,22 @@ export default function KanbanBoard({ applications: initial, columns }: Props) {
                   key={app.id}
                   draggable
                   onDragStart={() => setDragging(app.id)}
-                  className="rounded-md bg-white border p-3 shadow-sm cursor-grab active:cursor-grabbing select-none"
+                  className="rounded-md bg-card border border-border p-3 shadow-sm cursor-grab active:cursor-grabbing select-none"
                 >
-                  <p className="text-sm font-medium text-gray-900 truncate">{app.applicant_full_name}</p>
-                  {app.parent_phone && <p className="text-xs text-gray-500 mt-0.5">{app.parent_phone}</p>}
-                  {app.birth_date && <p className="text-xs text-gray-400">{formatDate(app.birth_date)}</p>}
+                  <div className="flex items-start justify-between gap-1">
+                    <p className="text-sm font-medium text-foreground truncate">{app.applicant_full_name}</p>
+                    <button
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => { e.stopPropagation(); handleDelete(app.id, app.applicant_full_name) }}
+                      disabled={deletingId === app.id}
+                      className="shrink-0 p-0.5 text-muted-foreground/40 hover:text-red-500 transition-colors cursor-pointer"
+                      title="Sil"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  {app.parent_phone && <p className="text-xs text-muted-foreground mt-0.5">{app.parent_phone}</p>}
+                  {app.birth_date && <p className="text-xs text-muted-foreground/60">{formatDate(app.birth_date)}</p>}
                 </div>
               ))}
             </div>

@@ -9,10 +9,10 @@ import { upsertAttendance } from './actions'
 type Status = 'present' | 'absent' | 'late' | 'excused'
 
 const STATUSES: { value: Status; label: string; active: string; idle: string }[] = [
-  { value: 'present', label: 'Geldi',   active: 'bg-green-600 text-white',  idle: 'bg-gray-100 text-gray-500 hover:bg-green-50' },
-  { value: 'absent',  label: 'Gelmedi', active: 'bg-red-500 text-white',    idle: 'bg-gray-100 text-gray-500 hover:bg-red-50' },
-  { value: 'late',    label: 'Geç',     active: 'bg-yellow-500 text-white', idle: 'bg-gray-100 text-gray-500 hover:bg-yellow-50' },
-  { value: 'excused', label: 'İzinli',  active: 'bg-blue-500 text-white',   idle: 'bg-gray-100 text-gray-500 hover:bg-blue-50' },
+  { value: 'present', label: 'Geldi',   active: 'bg-green-600 text-white',  idle: 'bg-muted text-muted-foreground hover:bg-green-900/30 hover:text-green-400' },
+  { value: 'absent',  label: 'Gelmedi', active: 'bg-red-500 text-white',    idle: 'bg-muted text-muted-foreground hover:bg-red-900/30 hover:text-red-400' },
+  { value: 'late',    label: 'Geç',     active: 'bg-yellow-500 text-white', idle: 'bg-muted text-muted-foreground hover:bg-yellow-900/30 hover:text-yellow-400' },
+  { value: 'excused', label: 'İzinli',  active: 'bg-blue-500 text-white',   idle: 'bg-muted text-muted-foreground hover:bg-blue-900/30 hover:text-blue-400' },
 ]
 
 interface AttendanceRecord {
@@ -55,7 +55,7 @@ function StudentRow({
 
   return (
     <div className={`flex items-center justify-between px-4 py-2.5 text-sm ${isPending ? 'opacity-60' : ''}`}>
-      <span className="text-gray-900 font-medium">{fullName}</span>
+      <span className="text-foreground font-medium">{fullName}</span>
       <div className="flex gap-1">
         {STATUSES.map((s) => (
           <button
@@ -98,18 +98,18 @@ export default function YoklamaClient({
         const students = [...allStudents, ...extraStudents]
 
         return (
-          <div key={session.id} className="rounded-lg border bg-white overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
+          <div key={session.id} className="rounded-lg border bg-card overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 bg-muted/50 border-b">
               <div>
-                <p className="font-medium text-gray-900">{session.groups?.name}</p>
-                <p className="text-xs text-gray-500">{session.start_time?.slice(0, 5)} – {session.end_time?.slice(0, 5)}</p>
+                <p className="font-medium text-foreground">{session.groups?.name}</p>
+                <p className="text-xs text-muted-foreground">{session.start_time?.slice(0, 5)} – {session.end_time?.slice(0, 5)}</p>
               </div>
               <Badge variant={session.status === 'cancelled' ? 'destructive' : session.status === 'completed' ? 'success' : 'secondary'}>
                 {session.status === 'scheduled' ? 'Planlandı' : session.status === 'completed' ? 'Tamamlandı' : 'İptal'}
               </Badge>
             </div>
             {students.length === 0 ? (
-              <p className="px-4 py-6 text-sm text-gray-400 text-center">Bu grupta aktif öğrenci yok.</p>
+              <p className="px-4 py-6 text-sm text-muted-foreground text-center">Bu grupta aktif öğrenci yok.</p>
             ) : (
               <div className="divide-y">
                 {students.map((student) => (

@@ -11,13 +11,16 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatCurrency, formatDate, TR_DAYS } from '@/lib/utils'
-import { Pencil, Plus, Trash2, UserMinus } from 'lucide-react'
+import { Pencil, Plus, Trash2, UserMinus, Check } from 'lucide-react'
+import { GROUP_COLORS } from '@/lib/group-colors'
 import {
   updateGroup,
+  updateGroupColor,
   addSlot,
   removeSlot,
   addStudentToGroup,
   removeStudentFromGroup,
+  deleteGroup,
 } from '@/app/(admin)/gruplar/actions'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -40,12 +43,10 @@ interface StudentGroup {
 interface Group {
   id: string
   name: string
-  age_min: number | null
-  age_max: number | null
-  capacity: number | null
   monthly_fee: number | null
   is_active: boolean | null
   primary_coach_id: string | null
+  color: string | null
   staff: { id: string; full_name: string } | null
   group_schedule_slots: Slot[]
   student_groups: StudentGroup[]
@@ -91,9 +92,6 @@ function EditGroupModal({
   const [isPending, startTransition] = useTransition()
   const [form, setForm] = useState({
     name: group.name,
-    age_min: group.age_min != null ? String(group.age_min) : '',
-    age_max: group.age_max != null ? String(group.age_max) : '',
-    capacity: group.capacity != null ? String(group.capacity) : '',
     monthly_fee: group.monthly_fee != null ? String(group.monthly_fee) : '',
     primary_coach_id: group.primary_coach_id ?? '',
     is_active: group.is_active !== false ? 'active' : 'inactive',
@@ -110,9 +108,6 @@ function EditGroupModal({
       try {
         await updateGroup(group.id, {
           name: form.name.trim(),
-          age_min: form.age_min ? Number(form.age_min) : null,
-          age_max: form.age_max ? Number(form.age_max) : null,
-          capacity: form.capacity ? Number(form.capacity) : null,
           monthly_fee: form.monthly_fee ? Number(form.monthly_fee) : null,
           primary_coach_id: form.primary_coach_id || null,
           is_active: form.is_active === 'active',
@@ -120,9 +115,6 @@ function EditGroupModal({
         toast.success('Grup bilgileri güncellendi')
         onSuccess({
           name: form.name.trim(),
-          age_min: form.age_min ? Number(form.age_min) : null,
-          age_max: form.age_max ? Number(form.age_max) : null,
-          capacity: form.capacity ? Number(form.capacity) : null,
           monthly_fee: form.monthly_fee ? Number(form.monthly_fee) : null,
           primary_coach_id: form.primary_coach_id || null,
           is_active: form.is_active === 'active',
@@ -144,47 +136,14 @@ function EditGroupModal({
             <Label>Grup Adı *</Label>
             <Input value={form.name} onChange={(e) => set('name', e.target.value)} required />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Yaş Min</Label>
-              <Input
-                type="number"
-                value={form.age_min}
-                onChange={(e) => set('age_min', e.target.value)}
-                min={4}
-                max={22}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Yaş Max</Label>
-              <Input
-                type="number"
-                value={form.age_max}
-                onChange={(e) => set('age_max', e.target.value)}
-                min={4}
-                max={22}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Kapasite</Label>
-              <Input
-                type="number"
-                value={form.capacity}
-                onChange={(e) => set('capacity', e.target.value)}
-                min={1}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Aylık Ücret (₺)</Label>
-              <Input
-                type="number"
-                value={form.monthly_fee}
-                onChange={(e) => set('monthly_fee', e.target.value)}
-                min={0}
-              />
-            </div>
+          <div className="space-y-1.5">
+            <Label>Aylık Ücret (₺)</Label>
+            <Input
+              type="number"
+              value={form.monthly_fee}
+              onChange={(e) => set('monthly_fee', e.target.value)}
+              min={0}
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Antrenör</Label>
@@ -374,7 +333,7 @@ function AddStudentModal({
           />
           <div className="max-h-64 overflow-y-auto divide-y rounded border">
             {filtered.length === 0 && (
-              <p className="p-4 text-sm text-center text-gray-500">Öğrenci bulunamadı.</p>
+              <p className="p-4 text-sm text-center text-muted-foreground">Öğrenci bulunamadı.</p>
             )}
             {filtered.map((s) => (
               <button
@@ -382,7 +341,7 @@ function AddStudentModal({
                 type="button"
                 disabled={isPending}
                 onClick={() => pick(s)}
-                className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted/50 transition-colors text-foreground"
               >
                 {s.full_name}
               </button>
@@ -427,6 +386,8 @@ export default function GrupDetailTabs({
   const [addStudentModal, setAddStudentModal] = useState(false)
   const [removingSlot, setRemovingSlot] = useState<string | null>(null)
   const [removingStudent, setRemovingStudent] = useState<string | null>(null)
+  const [deletingGroup, setDeletingGroup] = useState(false)
+  const [colorPending, startColorTransition] = useTransition()
 
   const activeStudentGroups = studentGroups.filter((sg) => sg.is_active)
 
@@ -456,6 +417,31 @@ export default function GrupDetailTabs({
     }
   }
 
+  async function handleDeleteGroup() {
+    if (!confirm(`"${group.name}" grubu kalıcı olarak silinsin mi? İçindeki öğrenci atamaları ve slotlar da silinir.`)) return
+    setDeletingGroup(true)
+    try {
+      await deleteGroup(group.id)
+      router.push('/program?tab=gruplar')
+    } catch (err: any) {
+      toast.error('Silinemedi: ' + (err?.message ?? 'Bilinmeyen hata'))
+      setDeletingGroup(false)
+    }
+  }
+
+  function handleColorChange(colorKey: string) {
+    if (colorKey === group.color) return
+    startColorTransition(async () => {
+      try {
+        await updateGroupColor(group.id, colorKey)
+        setGroup((g) => ({ ...g, color: colorKey }))
+        toast.success('Grup rengi güncellendi')
+      } catch (err: any) {
+        toast.error('Renk güncellenemedi: ' + (err?.message ?? 'Bilinmeyen hata'))
+      }
+    })
+  }
+
   async function handleRemoveStudent(sgId: string) {
     setRemovingStudent(sgId)
     try {
@@ -477,9 +463,6 @@ export default function GrupDetailTabs({
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="genel">Genel</TabsTrigger>
           <TabsTrigger value="program">Program ({slots.length})</TabsTrigger>
-          <TabsTrigger value="ogrenciler">
-            Öğrenciler ({activeStudentGroups.length})
-          </TabsTrigger>
           <TabsTrigger value="yoklama">
             Yoklama Geçmişi ({normalSessions.length})
           </TabsTrigger>
@@ -490,104 +473,68 @@ export default function GrupDetailTabs({
 
         {/* ── GENEL ─────────────────────────────────────────────────────────── */}
         <TabsContent value="genel">
-          <div className="rounded-lg border bg-white overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-3 border-b bg-gray-50">
-              <span className="text-sm font-medium text-gray-700">Genel Bilgiler</span>
-              <Button size="sm" variant="outline" onClick={() => setEditModal(true)}>
-                <Pencil className="w-3.5 h-3.5 mr-1.5" />
-                Düzenle
-              </Button>
+          <div className="rounded-lg border bg-card overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-3 border-b bg-muted/50">
+              <span className="text-sm font-medium text-foreground/80">Genel Bilgiler</span>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => setEditModal(true)}>
+                  <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                  Düzenle
+                </Button>
+                <Button size="sm" variant="destructive" onClick={handleDeleteGroup} disabled={deletingGroup}>
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                  {deletingGroup ? 'Siliniyor…' : 'Grubu Sil'}
+                </Button>
+              </div>
             </div>
             <div className="p-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 {([
                   ['Grup Adı', group.name],
                   ['Antrenör', coachName],
-                  [
-                    'Yaş Aralığı',
-                    group.age_min != null
-                      ? `${group.age_min} – ${group.age_max ?? '?'} yaş`
-                      : '—',
-                  ],
-                  ['Kapasite', group.capacity != null ? String(group.capacity) : '—'],
                   ['Aylık Ücret', formatCurrency(group.monthly_fee)],
                   ['Durum', group.is_active !== false ? 'Aktif' : 'Pasif'],
                 ] as [string, string][]).map(([label, value]) => (
                   <div key={label}>
-                    <p className="text-xs text-gray-500">{label}</p>
-                    <p className="font-medium text-gray-900 mt-0.5">{value}</p>
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="font-medium text-foreground mt-0.5">{value}</p>
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-        </TabsContent>
 
-        {/* ── PROGRAM ───────────────────────────────────────────────────────── */}
-        <TabsContent value="program">
-          <div className="rounded-lg border bg-white overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-3 border-b bg-gray-50">
-              <span className="text-sm font-medium text-gray-700">Haftalık Program</span>
-              <Button size="sm" onClick={() => setSlotModal(true)}>
-                <Plus className="w-3.5 h-3.5 mr-1.5" />
-                Slot Ekle
-              </Button>
-            </div>
-            {slots.length === 0 ? (
-              <div className="p-8 text-center text-sm text-gray-500">
-                Henüz antrenman slotu eklenmedi.
+              <div className="mt-5">
+                <p className="text-xs text-muted-foreground mb-2">Grup Rengi</p>
+                <div className="flex flex-wrap gap-2">
+                  {GROUP_COLORS.map((c) => {
+                    const selected = group.color === c.key
+                    return (
+                      <button
+                        key={c.key}
+                        type="button"
+                        disabled={colorPending}
+                        onClick={() => handleColorChange(c.key)}
+                        className={`flex items-center justify-center w-7 h-7 rounded-full ${c.swatch} transition-transform hover:scale-110 disabled:opacity-50 ${
+                          selected ? 'ring-2 ring-offset-2 ring-foreground ring-offset-card' : ''
+                        }`}
+                        title={c.key}
+                      >
+                        {selected && (
+                          <Check
+                            className={`w-3.5 h-3.5 ${c.key === 'white' ? 'text-neutral-900' : 'text-white'}`}
+                          />
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            ) : (
-              <table className="min-w-full text-sm divide-y">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Gün</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Başlangıç</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Bitiş</th>
-                    <th className="px-4 py-3" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {slots
-                    .slice()
-                    .sort((a, b) => a.day_of_week - b.day_of_week)
-                    .map((slot) => (
-                      <tr key={slot.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-gray-900">
-                          {TR_DAYS[(slot.day_of_week - 1) % 7]}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">
-                          {slot.start_time.slice(0, 5)}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">
-                          {slot.end_time.slice(0, 5)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleRemoveSlot(slot.id)}
-                            disabled={removingSlot === slot.id}
-                            className="px-2 text-gray-400 hover:text-red-600"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            )}
+            </div>
           </div>
-        </TabsContent>
 
-        {/* ── ÖĞRENCİLER ───────────────────────────────────────────────────── */}
-        <TabsContent value="ogrenciler">
-          <div className="rounded-lg border bg-white overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-3 border-b bg-gray-50">
-              <span className="text-sm font-medium text-gray-700">
-                Kayıtlı Öğrenciler — {activeStudentGroups.length} /{' '}
-                {group.capacity ?? '?'}
+          <div className="rounded-lg border bg-card overflow-hidden mt-4">
+            <div className="flex items-center justify-between px-6 py-3 border-b bg-muted/50">
+              <span className="text-sm font-medium text-foreground/80">
+                Kayıtlı Öğrenciler — {activeStudentGroups.length}
               </span>
               <Button size="sm" onClick={() => setAddStudentModal(true)}>
                 <Plus className="w-3.5 h-3.5 mr-1.5" />
@@ -595,15 +542,15 @@ export default function GrupDetailTabs({
               </Button>
             </div>
             {activeStudentGroups.length === 0 ? (
-              <div className="p-8 text-center text-sm text-gray-500">
+              <div className="p-8 text-center text-sm text-muted-foreground">
                 Bu grupta henüz öğrenci yok.
               </div>
             ) : (
               <table className="min-w-full text-sm divide-y">
-                <thead className="bg-gray-50">
+                <thead className="bg-muted/50">
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Öğrenci</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Öğrenci</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">
                       Katılım Tarihi
                     </th>
                     <th className="px-4 py-3" />
@@ -611,11 +558,11 @@ export default function GrupDetailTabs({
                 </thead>
                 <tbody className="divide-y">
                   {activeStudentGroups.map((sg) => (
-                    <tr key={sg.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">
+                    <tr key={sg.id} className="hover:bg-muted/50">
+                      <td className="px-4 py-3 font-medium text-foreground">
                         {sg.students?.full_name ?? '—'}
                       </td>
-                      <td className="px-4 py-3 text-gray-600">
+                      <td className="px-4 py-3 text-muted-foreground">
                         {formatDate(sg.joined_at)}
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -624,7 +571,7 @@ export default function GrupDetailTabs({
                           variant="ghost"
                           onClick={() => handleRemoveStudent(sg.id)}
                           disabled={removingStudent === sg.id}
-                          className="px-2 text-gray-400 hover:text-red-600"
+                          className="px-2 text-muted-foreground/60 hover:text-red-600"
                           title="Gruptan çıkar"
                         >
                           <UserMinus className="w-4 h-4" />
@@ -638,31 +585,89 @@ export default function GrupDetailTabs({
           </div>
         </TabsContent>
 
+        {/* ── PROGRAM ───────────────────────────────────────────────────────── */}
+        <TabsContent value="program">
+          <div className="rounded-lg border bg-card overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-3 border-b bg-muted/50">
+              <span className="text-sm font-medium text-foreground/80">Haftalık Program</span>
+              <Button size="sm" onClick={() => setSlotModal(true)}>
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                Slot Ekle
+              </Button>
+            </div>
+            {slots.length === 0 ? (
+              <div className="p-8 text-center text-sm text-muted-foreground">
+                Henüz antrenman slotu eklenmedi.
+              </div>
+            ) : (
+              <table className="min-w-full text-sm divide-y">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Gün</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Başlangıç</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Bitiş</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {slots
+                    .slice()
+                    .sort((a, b) => a.day_of_week - b.day_of_week)
+                    .map((slot) => (
+                      <tr key={slot.id} className="hover:bg-muted/50">
+                        <td className="px-4 py-3 text-foreground">
+                          {TR_DAYS[(slot.day_of_week - 1) % 7]}
+                        </td>
+                        <td className="px-4 py-3 text-foreground/80">
+                          {slot.start_time.slice(0, 5)}
+                        </td>
+                        <td className="px-4 py-3 text-foreground/80">
+                          {slot.end_time.slice(0, 5)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleRemoveSlot(slot.id)}
+                            disabled={removingSlot === slot.id}
+                            className="px-2 text-muted-foreground/60 hover:text-red-600"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </TabsContent>
+
         {/* ── YOKLAMA GEÇMİŞİ ──────────────────────────────────────────────── */}
         <TabsContent value="yoklama">
-          <div className="rounded-lg border bg-white overflow-hidden">
-            <div className="px-6 py-3 border-b bg-gray-50">
-              <span className="text-sm font-medium text-gray-700">Yoklama Geçmişi</span>
+          <div className="rounded-lg border bg-card overflow-hidden">
+            <div className="px-6 py-3 border-b bg-muted/50">
+              <span className="text-sm font-medium text-foreground/80">Yoklama Geçmişi</span>
             </div>
             {normalSessions.length === 0 ? (
-              <div className="p-8 text-center text-sm text-gray-500">
+              <div className="p-8 text-center text-sm text-muted-foreground">
                 Henüz yoklama oturumu yok.
               </div>
             ) : (
               <table className="min-w-full text-sm divide-y">
-                <thead className="bg-gray-50">
+                <thead className="bg-muted/50">
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Tarih</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Saat</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Durum</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Not</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tarih</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Saat</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Durum</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Not</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {normalSessions.map((s) => (
-                    <tr key={s.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-900">{formatDate(s.session_date)}</td>
-                      <td className="px-4 py-3 text-gray-700">
+                    <tr key={s.id} className="hover:bg-muted/50">
+                      <td className="px-4 py-3 text-foreground">{formatDate(s.session_date)}</td>
+                      <td className="px-4 py-3 text-foreground/80">
                         {s.start_time.slice(0, 5)} – {s.end_time.slice(0, 5)}
                       </td>
                       <td className="px-4 py-3">
@@ -678,7 +683,7 @@ export default function GrupDetailTabs({
                           {SESSION_STATUS_LABEL[s.status ?? ''] ?? s.status ?? '—'}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">{s.notes ?? '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">{s.notes ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -689,35 +694,35 @@ export default function GrupDetailTabs({
 
         {/* ── İPTAL EDİLEN ANTRENMANLAR ─────────────────────────────────────── */}
         <TabsContent value="iptal">
-          <div className="rounded-lg border bg-white overflow-hidden">
-            <div className="px-6 py-3 border-b bg-gray-50">
-              <span className="text-sm font-medium text-gray-700">İptal Edilen Antrenmanlar</span>
+          <div className="rounded-lg border bg-card overflow-hidden">
+            <div className="px-6 py-3 border-b bg-muted/50">
+              <span className="text-sm font-medium text-foreground/80">İptal Edilen Antrenmanlar</span>
             </div>
             {cancelledSessions.length === 0 ? (
-              <div className="p-8 text-center text-sm text-gray-500">
+              <div className="p-8 text-center text-sm text-muted-foreground">
                 İptal edilmiş antrenman yok.
               </div>
             ) : (
               <table className="min-w-full text-sm divide-y">
-                <thead className="bg-gray-50">
+                <thead className="bg-muted/50">
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Tarih</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Saat</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">İptal Tarihi</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Sebep</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tarih</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Saat</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">İptal Tarihi</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Sebep</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {cancelledSessions.map((s) => (
-                    <tr key={s.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-900">{formatDate(s.session_date)}</td>
-                      <td className="px-4 py-3 text-gray-700">
+                    <tr key={s.id} className="hover:bg-muted/50">
+                      <td className="px-4 py-3 text-foreground">{formatDate(s.session_date)}</td>
+                      <td className="px-4 py-3 text-foreground/80">
                         {s.start_time.slice(0, 5)} – {s.end_time.slice(0, 5)}
                       </td>
-                      <td className="px-4 py-3 text-gray-600">
+                      <td className="px-4 py-3 text-muted-foreground">
                         {formatDate(s.cancelled_at)}
                       </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">
+                      <td className="px-4 py-3 text-muted-foreground text-xs">
                         {s.cancellation_reason ?? '—'}
                       </td>
                     </tr>

@@ -34,6 +34,7 @@ export type Database = {
           address: string | null
           default_aidat_amount: number | null
           default_uniform_amount: number | null
+          collection_day: number | null
           subscription_status: string | null
           subscription_starts_at: string | null
           subscription_ends_at: string | null
@@ -43,6 +44,7 @@ export type Database = {
           id?: string; name: string; slug: string
           logo_url?: string | null; contact_phone?: string | null; address?: string | null
           default_aidat_amount?: number | null; default_uniform_amount?: number | null
+          collection_day?: number | null
           subscription_status?: string | null
           subscription_starts_at?: string | null; subscription_ends_at?: string | null
           created_at?: string | null
@@ -166,19 +168,16 @@ export type Database = {
           id: string
           school_id: string
           name: string
-          age_min: number | null
-          age_max: number | null
-          capacity: number | null
           primary_coach_id: string | null
           monthly_fee: number | null
           is_active: boolean | null
+          color: string | null
           created_at: string | null
         }
         Insert: {
           id?: string; school_id: string; name: string
-          age_min?: number | null; age_max?: number | null; capacity?: number | null
           primary_coach_id?: string | null; monthly_fee?: number | null
-          is_active?: boolean | null; created_at?: string | null
+          is_active?: boolean | null; color?: string | null; created_at?: string | null
         }
         Update: Partial<Database['public']['Tables']['groups']['Insert']>
         Relationships: [
@@ -223,6 +222,7 @@ export type Database = {
           session_date: string; start_time: string; end_time: string
           status: string | null; cancellation_reason: string | null
           cancelled_by: string | null; cancelled_at: string | null
+          acknowledged_at: string | null
           taken_by: string | null; taken_at: string | null; notes: string | null
         }
         Insert: {
@@ -230,6 +230,7 @@ export type Database = {
           session_date: string; start_time: string; end_time: string
           status?: string | null; cancellation_reason?: string | null
           cancelled_by?: string | null; cancelled_at?: string | null
+          acknowledged_at?: string | null
           taken_by?: string | null; taken_at?: string | null; notes?: string | null
         }
         Update: Partial<Database['public']['Tables']['attendance_sessions']['Insert']>
@@ -241,10 +242,12 @@ export type Database = {
         Row: {
           id: string; session_id: string; student_id: string
           status: string; recorded_at: string | null
+          notified_at: string | null; dismissed_at: string | null
         }
         Insert: {
           id?: string; session_id: string; student_id: string
           status: string; recorded_at?: string | null
+          notified_at?: string | null; dismissed_at?: string | null
         }
         Update: Partial<Database['public']['Tables']['attendance_records']['Insert']>
         Relationships: [

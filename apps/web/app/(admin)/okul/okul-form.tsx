@@ -14,9 +14,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 interface School {
   id: string; name: string; address: string | null; contact_phone: string | null
   logo_url: string | null; default_aidat_amount: number | null; default_uniform_amount: number | null
+  collection_day: number | null
 }
 
-export default function AyarlarForm({ school }: { school: School | null }) {
+export default function OkulForm({ school }: { school: School | null }) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -26,6 +27,7 @@ export default function AyarlarForm({ school }: { school: School | null }) {
     contact_phone: school?.contact_phone ?? '',
     default_aidat_amount: String(school?.default_aidat_amount ?? ''),
     default_uniform_amount: String(school?.default_uniform_amount ?? ''),
+    collection_day: String(school?.collection_day ?? 1),
   })
   const [saving, setSaving] = useState(false)
   const [logoPreview, setLogoPreview] = useState<string | null>(school?.logo_url ?? null)
@@ -94,6 +96,7 @@ export default function AyarlarForm({ school }: { school: School | null }) {
       contact_phone: form.contact_phone || null,
       default_aidat_amount: form.default_aidat_amount ? Number(form.default_aidat_amount) : null,
       default_uniform_amount: form.default_uniform_amount ? Number(form.default_uniform_amount) : null,
+      collection_day: Math.min(28, Math.max(1, Number(form.collection_day) || 1)),
     } as any).eq('id', school.id)
 
     if (error) toast.error('Kaydedilemedi: ' + error.message)
@@ -117,7 +120,7 @@ export default function AyarlarForm({ school }: { school: School | null }) {
             <Label>Okul Logosu</Label>
             <div className="flex items-center gap-4">
               <div
-                className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden bg-gray-50 flex-shrink-0 cursor-pointer hover:border-gray-300 transition-colors"
+                className="w-16 h-16 rounded-xl border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-muted flex-shrink-0 cursor-pointer hover:border-foreground/20 transition-colors"
                 onClick={() => fileInputRef.current?.click()}
                 title="Logo yükle"
               >
@@ -125,7 +128,7 @@ export default function AyarlarForm({ school }: { school: School | null }) {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" />
                 ) : (
-                  <ImageIcon className="w-6 h-6 text-gray-300" />
+                  <ImageIcon className="w-6 h-6 text-muted-foreground/50" />
                 )}
               </div>
               <div className="space-y-1.5">
@@ -139,7 +142,7 @@ export default function AyarlarForm({ school }: { school: School | null }) {
                   <Upload className="w-3.5 h-3.5 mr-1.5" />
                   {uploading ? 'Yükleniyor…' : logoPreview ? 'Değiştir' : 'Logo Yükle'}
                 </Button>
-                <p className="text-xs text-gray-400">PNG, JPG veya SVG · Maks. 2 MB</p>
+                <p className="text-xs text-muted-foreground">PNG, JPG veya SVG · Maks. 2 MB</p>
               </div>
             </div>
             <input
@@ -171,6 +174,17 @@ export default function AyarlarForm({ school }: { school: School | null }) {
           <div className="space-y-1.5">
             <Label>Forma Ücreti (₺)</Label>
             <Input type="number" value={form.default_uniform_amount} onChange={(e) => set('default_uniform_amount', e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Tahsilat Günü</Label>
+            <Input
+              type="number"
+              min={1}
+              max={28}
+              value={form.collection_day}
+              onChange={(e) => set('collection_day', e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">Aidatların her ay hangi gün tahsil edileceği (1–28).</p>
           </div>
         </CardContent>
       </Card>

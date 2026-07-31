@@ -52,9 +52,9 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">{student.full_name}</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Öğrenci Detayı</p>
+      <div className="space-y-2 mb-6">
+        <h1 className="text-3xl font-bold text-foreground">{student.full_name}</h1>
+        <p className="text-sm text-muted-foreground">Öğrenci Detayı</p>
       </div>
       <StudentDetailTabs
         student={student as any}

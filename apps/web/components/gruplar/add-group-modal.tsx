@@ -27,9 +27,6 @@ export default function AddGroupModal({ coaches }: { coaches: Coach[] }) {
   const [isPending, startTransition] = useTransition()
   const [form, setForm] = useState({
     name: '',
-    age_min: '',
-    age_max: '',
-    capacity: '',
     monthly_fee: '',
     primary_coach_id: '',
   })
@@ -61,9 +58,6 @@ export default function AddGroupModal({ coaches }: { coaches: Coach[] }) {
       try {
         await createGroup({
           name: form.name.trim(),
-          age_min: form.age_min ? Number(form.age_min) : null,
-          age_max: form.age_max ? Number(form.age_max) : null,
-          capacity: form.capacity ? Number(form.capacity) : null,
           monthly_fee: form.monthly_fee ? Number(form.monthly_fee) : null,
           primary_coach_id: form.primary_coach_id || null,
           slots: slots.map((s) => ({
@@ -74,7 +68,7 @@ export default function AddGroupModal({ coaches }: { coaches: Coach[] }) {
         })
         toast.success(`${form.name} grubu oluşturuldu`)
         setOpen(false)
-        setForm({ name: '', age_min: '', age_max: '', capacity: '', monthly_fee: '', primary_coach_id: '' })
+        setForm({ name: '', monthly_fee: '', primary_coach_id: '' })
         setSlots([{ day_of_week: '1', start_time: '16:00', end_time: '17:30' }])
       } catch (err: any) {
         toast.error('Grup oluşturulamadı: ' + (err?.message ?? 'Bilinmeyen hata'))
@@ -84,10 +78,8 @@ export default function AddGroupModal({ coaches }: { coaches: Coach[] }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="w-4 h-4" /> Yeni Grup
-        </Button>
+      <DialogTrigger render={<Button />}>
+        <Plus className="w-4 h-4" /> Yeni Grup
       </DialogTrigger>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -104,52 +96,15 @@ export default function AddGroupModal({ coaches }: { coaches: Coach[] }) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Yaş Min</Label>
-              <Input
-                type="number"
-                value={form.age_min}
-                onChange={(e) => set('age_min', e.target.value)}
-                placeholder="8"
-                min={4}
-                max={22}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Yaş Max</Label>
-              <Input
-                type="number"
-                value={form.age_max}
-                onChange={(e) => set('age_max', e.target.value)}
-                placeholder="12"
-                min={4}
-                max={22}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Kapasite</Label>
-              <Input
-                type="number"
-                value={form.capacity}
-                onChange={(e) => set('capacity', e.target.value)}
-                placeholder="20"
-                min={1}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Aylık Ücret (₺)</Label>
-              <Input
-                type="number"
-                value={form.monthly_fee}
-                onChange={(e) => set('monthly_fee', e.target.value)}
-                placeholder="500"
-                min={0}
-              />
-            </div>
+          <div className="space-y-1.5">
+            <Label>Aylık Ücret (₺)</Label>
+            <Input
+              type="number"
+              value={form.monthly_fee}
+              onChange={(e) => set('monthly_fee', e.target.value)}
+              placeholder="500"
+              min={0}
+            />
           </div>
 
           <div className="space-y-1.5">
@@ -212,7 +167,7 @@ export default function AddGroupModal({ coaches }: { coaches: Coach[] }) {
                   disabled={slots.length === 1}
                   className="px-2"
                 >
-                  <Trash2 className="w-4 h-4 text-gray-400" />
+                  <Trash2 className="w-4 h-4 text-muted-foreground" />
                 </Button>
               </div>
             ))}

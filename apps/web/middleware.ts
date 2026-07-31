@@ -5,9 +5,11 @@ export async function middleware(request: NextRequest) {
   const { supabase, supabaseResponse } = createMiddlewareClient(request)
   const { pathname } = request.nextUrl
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // getSession() cookie'deki imzalı JWT'yi okur — network round-trip yok (~0ms)
+  // Güvenlik: JWT Supabase tarafından imzalandığı için client tarafından taklit edilemez.
+  // Rol zaten app_metadata'da (trigger ile yazıldı), RLS da veri erişimini koruyor.
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     if (pathname !== '/login') {
@@ -16,14 +18,7 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
-  // Fetch role from profiles
-  const { data: profileData } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  const role = (profileData as { role?: string } | null)?.role
+  const role = user.app_metadata?.role as string | undefined
 
   // coach / parent → no web access
   if (role === 'coach' || role === 'parent') {

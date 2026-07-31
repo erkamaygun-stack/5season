@@ -36,7 +36,7 @@ export default async function OkullarPage() {
               <div className="min-w-0">
                 <p className="font-semibold text-gray-900 truncate">{school.name}</p>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {new Date(school.created_at).toLocaleDateString('tr-TR')}
+                  {school.created_at ? new Date(school.created_at).toLocaleDateString('tr-TR') : '-'}
                 </p>
               </div>
             </div>

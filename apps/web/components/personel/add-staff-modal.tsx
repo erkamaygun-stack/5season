@@ -51,10 +51,8 @@ export default function AddStaffModal() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="w-4 h-4" /> Personel Ekle
-        </Button>
+      <DialogTrigger render={<Button />}>
+        <Plus className="w-4 h-4" /> Personel Ekle
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
@@ -92,7 +90,7 @@ export default function AddStaffModal() {
               required={isCoach}
             />
             {isCoach && (
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 Antrenör mobil uygulamaya bu numara ile giriş yapacak.
               </p>
             )}

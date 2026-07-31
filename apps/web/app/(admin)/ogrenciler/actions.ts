@@ -127,3 +127,162 @@ export async function deleteStudent(studentId: string) {
 
   revalidatePath('/ogrenciler')
 }
+
+export async function createAidatInvoice(data: {
+  student_id: string
+  period_year: number
+  period_month: number
+  amount: number
+  due_date?: string
+}) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Oturum bulunamadı')
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('school_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.school_id) throw new Error('Okul bilgisi bulunamadı')
+
+  const { error } = await supabase.from('aidat_invoices').insert({
+    school_id: profile.school_id,
+    student_id: data.student_id,
+    period_year: data.period_year,
+    period_month: data.period_month,
+    amount: data.amount,
+    paid_amount: 0,
+    status: 'pending',
+    due_date: data.due_date || null,
+    is_prorated: false,
+  } as any)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/ogrenciler')
+}
+
+export async function updateAidatInvoice(id: string, data: {
+  amount: number
+  due_date?: string
+}) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Oturum bulunamadı')
+
+  const { error } = await supabase
+    .from('aidat_invoices')
+    .update({ amount: data.amount, due_date: data.due_date || null } as any)
+    .eq('id', id)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/ogrenciler')
+}
+
+export async function deleteAidatInvoice(id: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Oturum bulunamadı')
+
+  const { error } = await supabase.from('aidat_invoices').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/ogrenciler')
+}
+
+export async function updatePayment(id: string, data: {
+  amount: number
+  payment_method?: string
+  notes?: string
+}) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Oturum bulunamadı')
+
+  // Önce mevcut ödemeyi al (hangi invoice'a ait olduğunu bulmak için)
+  const { data: payment, error: fetchErr } = await supabase
+    .from('payments')
+    .select('invoice_id, invoice_type')
+    .eq('id', id)
+    .single()
+  if (fetchErr || !payment) throw new Error('Ödeme bulunamadı')
+
+  const { error } = await supabase
+    .from('payments')
+    .update({
+      amount: data.amount,
+      payment_method: data.payment_method || null,
+      notes: data.notes || null,
+    } as any)
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+
+  // Trigger sadece INSERT'te çalıştığı için paid_amount'u manuel güncelle
+  if (payment.invoice_type === 'aidat') {
+    const { data: allPayments } = await supabase
+      .from('payments')
+      .select('amount')
+      .eq('invoice_id', payment.invoice_id)
+      .eq('invoice_type', 'aidat')
+
+    const totalPaid = (allPayments ?? []).reduce((sum: number, p: any) => sum + (p.amount ?? 0), 0)
+
+    const { data: inv } = await supabase
+      .from('aidat_invoices')
+      .select('amount')
+      .eq('id', payment.invoice_id)
+      .single()
+
+    const invAmount = inv?.amount ?? 0
+    const status = totalPaid <= 0 ? 'pending' : totalPaid >= invAmount ? 'paid' : 'partial'
+
+    await supabase
+      .from('aidat_invoices')
+      .update({ paid_amount: totalPaid, status } as any)
+      .eq('id', payment.invoice_id)
+  }
+
+  revalidatePath('/ogrenciler')
+}
+
+export async function deletePayment(id: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Oturum bulunamadı')
+
+  const { data: payment, error: fetchErr } = await supabase
+    .from('payments')
+    .select('invoice_id, invoice_type, amount')
+    .eq('id', id)
+    .single()
+  if (fetchErr || !payment) throw new Error('Ödeme bulunamadı')
+
+  const { error } = await supabase.from('payments').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+
+  // Trigger sadece INSERT'te çalıştığı için paid_amount'u manuel yeniden hesapla
+  if (payment.invoice_type === 'aidat') {
+    const { data: remaining } = await supabase
+      .from('payments')
+      .select('amount')
+      .eq('invoice_id', payment.invoice_id)
+      .eq('invoice_type', 'aidat')
+
+    const totalPaid = (remaining ?? []).reduce((sum: number, p: any) => sum + (p.amount ?? 0), 0)
+
+    const { data: inv } = await supabase
+      .from('aidat_invoices')
+      .select('amount')
+      .eq('id', payment.invoice_id)
+      .single()
+
+    const invAmount = inv?.amount ?? 0
+    const status = totalPaid <= 0 ? 'pending' : totalPaid >= invAmount ? 'paid' : 'partial'
+
+    await supabase
+      .from('aidat_invoices')
+      .update({ paid_amount: totalPaid, status } as any)
+      .eq('id', payment.invoice_id)
+  }
+
+  revalidatePath('/ogrenciler')
+}

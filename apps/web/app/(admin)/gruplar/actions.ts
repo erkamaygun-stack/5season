@@ -18,9 +18,6 @@ async function getContext() {
 
 export async function createGroup(data: {
   name: string
-  age_min?: number | null
-  age_max?: number | null
-  capacity?: number | null
   monthly_fee?: number | null
   primary_coach_id?: string | null
   slots: Array<{ day_of_week: number; start_time: string; end_time: string }>
@@ -32,9 +29,6 @@ export async function createGroup(data: {
     .insert({
       school_id,
       name: data.name,
-      age_min: data.age_min ?? null,
-      age_max: data.age_max ?? null,
-      capacity: data.capacity ?? null,
       monthly_fee: data.monthly_fee ?? null,
       primary_coach_id: data.primary_coach_id ?? null,
       is_active: true,
@@ -58,9 +52,6 @@ export async function updateGroup(
   id: string,
   data: {
     name: string
-    age_min?: number | null
-    age_max?: number | null
-    capacity?: number | null
     monthly_fee?: number | null
     primary_coach_id?: string | null
     is_active: boolean
@@ -72,9 +63,6 @@ export async function updateGroup(
     .from('groups')
     .update({
       name: data.name,
-      age_min: data.age_min ?? null,
-      age_max: data.age_max ?? null,
-      capacity: data.capacity ?? null,
       monthly_fee: data.monthly_fee ?? null,
       primary_coach_id: data.primary_coach_id ?? null,
       is_active: data.is_active,
@@ -85,6 +73,20 @@ export async function updateGroup(
 
   revalidatePath(`/gruplar/${id}`)
   revalidatePath('/gruplar')
+}
+
+export async function updateGroupColor(id: string, color: string) {
+  const { supabase } = await getContext()
+
+  const { error } = await supabase
+    .from('groups')
+    .update({ color } as any)
+    .eq('id', id)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/gruplar/${id}`)
+  revalidatePath('/')
 }
 
 export async function addSlot(
@@ -145,4 +147,14 @@ export async function removeStudentFromGroup(studentGroupId: string, groupId: st
   if (error) throw new Error(error.message)
 
   revalidatePath(`/gruplar/${groupId}`)
+}
+
+export async function deleteGroup(id: string) {
+  const { supabase } = await getContext()
+
+  const { error } = await supabase.from('groups').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/gruplar')
+  revalidatePath('/program')
 }

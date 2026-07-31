@@ -37,7 +37,6 @@ interface StaffMember {
 interface Group {
   id: string
   name: string
-  capacity: number | null
   is_active: boolean | null
 }
 
@@ -345,7 +344,6 @@ export default function StaffDetailTabs({
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-3 text-left font-medium text-gray-600">Grup Adı</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Kapasite</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-600">Durum</th>
                   </tr>
                 </thead>
@@ -353,7 +351,6 @@ export default function StaffDetailTabs({
                   {groups.map((g) => (
                     <tr key={g.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-medium text-gray-900">{g.name}</td>
-                      <td className="px-4 py-3 text-gray-600">{g.capacity ?? '—'}</td>
                       <td className="px-4 py-3">
                         <Badge variant={g.is_active ? 'success' : 'secondary'}>
                           {g.is_active ? 'Aktif' : 'Pasif'}

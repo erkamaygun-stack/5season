@@ -63,8 +63,8 @@ export default function AddExpenseModal() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button><Plus className="w-4 h-4" /> Gider Ekle</Button>
+      <DialogTrigger render={<Button />}>
+        <Plus className="w-4 h-4" /> Gider Ekle
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>

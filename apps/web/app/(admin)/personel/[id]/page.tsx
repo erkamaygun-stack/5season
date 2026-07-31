@@ -29,7 +29,7 @@ export default async function PersonelDetailPage({ params }: { params: Promise<{
   const [{ data: groups }, { data: salaryPayments }] = await Promise.all([
     supabase
       .from('groups')
-      .select('id, name, capacity, is_active')
+      .select('id, name, is_active')
       .eq('primary_coach_id', id)
       .order('name'),
     supabase

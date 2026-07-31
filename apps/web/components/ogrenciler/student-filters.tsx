@@ -27,7 +27,7 @@ export default function StudentFilters({ groups }: { groups: Group[] }) {
   return (
     <div className="flex flex-wrap gap-3">
       <div className="relative flex-1 min-w-[180px] max-w-xs">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
           placeholder="Ad soyad ara…"
           defaultValue={searchParams.get('search') ?? ''}
@@ -80,7 +80,7 @@ export default function StudentFilters({ groups }: { groups: Group[] }) {
           min={3}
           max={25}
         />
-        <span className="text-gray-400 text-sm">–</span>
+        <span className="text-muted-foreground text-sm">–</span>
         <Input
           type="number"
           placeholder="Max yaş"

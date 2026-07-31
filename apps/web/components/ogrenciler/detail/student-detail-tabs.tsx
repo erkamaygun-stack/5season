@@ -13,8 +13,15 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatDate, formatCurrency, getMonthName } from '@/lib/utils'
-import { Upload, Plus, Trash2, UserPlus, Download, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
-import { deleteStudent } from '@/app/(admin)/ogrenciler/actions'
+import { Upload, Plus, Trash2, UserPlus, Download, ChevronLeft, ChevronRight, Pencil, Phone, Mail } from 'lucide-react'
+import {
+  deleteStudent,
+  createAidatInvoice,
+  updateAidatInvoice,
+  deleteAidatInvoice,
+  updatePayment,
+  deletePayment,
+} from '@/app/(admin)/ogrenciler/actions'
 
 interface Props {
   student: any
@@ -59,10 +66,18 @@ export default function StudentDetailTabs({
   const [editModal, setEditModal] = useState(false)
   const [signingDoc, setSigningDoc] = useState<string | null>(null)
   const [parents, setParents] = useState<any[]>(student.parent_student ?? [])
+  const [editParentTarget, setEditParentTarget] = useState<{ id: string; full_name: string; phone: string; email: string } | null>(null)
   const [studentGroups, setStudentGroups] = useState<any[]>(student.student_groups ?? [])
   const [equipInvoices, setEquipInvoices] = useState<any[]>(equipmentInvoices)
   const [equipPayModal, setEquipPayModal] = useState<any | null>(null)
   const [addEquipModal, setAddEquipModal] = useState(false)
+  const [localAidatInvoices, setLocalAidatInvoices] = useState<any[]>(aidatInvoices)
+  const [addAidatModal, setAddAidatModal] = useState(false)
+  const [editAidatTarget, setEditAidatTarget] = useState<any | null>(null)
+  const [deletingAidatId, setDeletingAidatId] = useState<string | null>(null)
+  const [localPayments, setLocalPayments] = useState<any[]>(payments)
+  const [editPaymentTarget, setEditPaymentTarget] = useState<any | null>(null)
+  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null)
 
   const activeGroup = studentGroups.find((sg: any) => sg.is_active)
 
@@ -190,217 +205,252 @@ export default function StudentDetailTabs({
       <Tabs defaultValue="genel" className="w-full">
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="genel">Genel</TabsTrigger>
-          <TabsTrigger value="veliler">Veliler</TabsTrigger>
-          <TabsTrigger value="gruplar">Gruplar</TabsTrigger>
           <TabsTrigger value="yoklama">Yoklama Geçmişi</TabsTrigger>
           <TabsTrigger value="aidat">Aidat</TabsTrigger>
           <TabsTrigger value="forma">Forma / Eşofman</TabsTrigger>
           <TabsTrigger value="odemeler">Ödeme Geçmişi</TabsTrigger>
-          <TabsTrigger value="notlar">Notlar</TabsTrigger>
         </TabsList>
 
         {/* ── GENEL ─────────────────────────────────────────────────────── */}
         <TabsContent value="genel">
-          <div className="rounded-lg border bg-white overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-3 border-b bg-gray-50">
-              <span className="text-sm font-medium text-gray-700">Genel Bilgiler</span>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => setEditModal(true)}>
-                  <Pencil className="w-3.5 h-3.5 mr-1.5" />
-                  Düzenle
-                </Button>
-                <Button size="sm" variant="destructive" onClick={handleDelete} disabled={deleting}>
-                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-                  {deleting ? 'Siliniyor…' : 'Profili Sil'}
-                </Button>
-              </div>
-            </div>
-            <div className="p-6 space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              {([
-                ['Ad Soyad', student.full_name],
-                ['Doğum Tarihi', formatDate(student.birth_date)],
-                ['Cinsiyet', student.gender === 'M' ? 'Erkek' : student.gender === 'F' ? 'Kız' : '-'],
-                ['Kan Grubu', student.blood_type ?? '-'],
-                ['Kayıt Tarihi', formatDate(student.enrollment_date)],
-                ['Durum', student.status === 'active' ? 'Aktif' : student.status === 'trial' ? 'Deneme' : 'Pasif'],
-                ['Aktif Grup', activeGroup?.groups?.name ?? '-'],
-                ['Forma', student.has_received_uniform ? 'Alındı' : 'Alınmadı'],
-              ] as [string, string][]).map(([label, value]) => (
-                <div key={label}>
-                  <p className="text-xs text-gray-500">{label}</p>
-                  <p className="font-medium text-gray-900 mt-0.5">{value}</p>
+          <div className="space-y-4">
+
+            {/* Genel Bilgiler */}
+            <div className="rounded-lg border bg-card overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-3 border-b bg-muted/50">
+                <span className="text-sm font-medium text-foreground">Genel Bilgiler</span>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setEditModal(true)}>
+                    <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                    Düzenle
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={handleDelete} disabled={deleting}>
+                    <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                    {deleting ? 'Siliniyor…' : 'Profili Sil'}
+                  </Button>
                 </div>
-              ))}
-            </div>
-
-            <div className="border-t pt-5 space-y-3">
-              <p className="text-sm font-semibold text-gray-700">Belgeler</p>
-              <div className="flex flex-wrap gap-3">
-                {(
-                  [
-                    { field: 'health_doc_url', label: 'Sağlık Dosyası' },
-                    { field: 'consent_doc_url', label: 'Veli İzin Formu' },
-                  ] as const
-                ).map(({ field, label }) => (
-                  <div key={field} className="flex items-center gap-3 p-3 rounded-lg border bg-gray-50 min-w-[240px]">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-gray-500">{label}</p>
-                      {student[field] ? (
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <button
-                            type="button"
-                            onClick={() => viewDoc(field)}
-                            disabled={signingDoc === field}
-                            className="text-sm text-primary hover:underline disabled:opacity-50"
-                          >
-                            {signingDoc === field ? 'Açılıyor…' : 'Görüntüle'}
-                          </button>
-                          <span className="text-gray-300">|</span>
-                          <button
-                            type="button"
-                            onClick={() => deleteDoc(field)}
-                            className="text-sm text-red-500 hover:underline"
-                          >
-                            Kaldır
-                          </button>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-400">Yüklenmedi</p>
-                      )}
+              </div>
+              <div className="p-6 space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                  {([
+                    ['Ad Soyad', student.full_name],
+                    ['Doğum Tarihi', formatDate(student.birth_date)],
+                    ['Cinsiyet', student.gender === 'M' ? 'Erkek' : student.gender === 'F' ? 'Kız' : '-'],
+                    ['Kan Grubu', student.blood_type ?? '-'],
+                    ['Kayıt Tarihi', formatDate(student.enrollment_date)],
+                    ['Durum', student.status === 'active' ? 'Aktif' : student.status === 'trial' ? 'Deneme' : 'Pasif'],
+                    ['Aktif Grup', activeGroup?.groups?.name ?? '-'],
+                    ['Forma', student.has_received_uniform ? 'Alındı' : 'Alınmadı'],
+                  ] as [string, string][]).map(([label, value]) => (
+                    <div key={label}>
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                      <p className="font-medium text-foreground mt-0.5">{value}</p>
                     </div>
-                    <label className="cursor-pointer shrink-0">
-                      <input
-                        type="file"
-                        className="hidden"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadDoc(field, f) }}
-                      />
-                      <Button variant="outline" size="sm" asChild>
-                        <span>
-                          <Upload className="w-3.5 h-3.5 mr-1.5" />
-                          Yükle
-                        </span>
-                      </Button>
-                    </label>
+                  ))}
+                </div>
+
+                <div className="border-t pt-5 space-y-3">
+                  <p className="text-sm font-semibold text-foreground">Belgeler</p>
+                  <div className="flex flex-wrap gap-3">
+                    {(
+                      [
+                        { field: 'health_doc_url', label: 'Sağlık Dosyası' },
+                        { field: 'consent_doc_url', label: 'Veli İzin Formu' },
+                      ] as const
+                    ).map(({ field, label }) => (
+                      <div key={field} className="flex items-center gap-3 p-3 rounded-lg border bg-muted/50 min-w-[240px]">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-muted-foreground">{label}</p>
+                          {student[field] ? (
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <button
+                                type="button"
+                                onClick={() => viewDoc(field)}
+                                disabled={signingDoc === field}
+                                className="text-sm text-primary hover:underline disabled:opacity-50"
+                              >
+                                {signingDoc === field ? 'Açılıyor…' : 'Görüntüle'}
+                              </button>
+                              <span className="text-muted-foreground/40">|</span>
+                              <button
+                                type="button"
+                                onClick={() => deleteDoc(field)}
+                                className="text-sm text-red-500 hover:underline"
+                              >
+                                Kaldır
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">Yüklenmedi</p>
+                          )}
+                        </div>
+                        <label className="cursor-pointer shrink-0">
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadDoc(field, f) }}
+                          />
+                          <Button variant="outline" size="sm" render={<span />}>
+                            <Upload className="w-3.5 h-3.5 mr-1.5" />
+                            Yükle
+                          </Button>
+                        </label>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
             </div>
-            </div>
-          </div>
-        </TabsContent>
 
-        {/* ── VELİLER ───────────────────────────────────────────────────── */}
-        <TabsContent value="veliler">
-          <div className="rounded-lg border bg-white overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
-              <span className="text-sm font-medium text-gray-700">Bağlı Veliler</span>
-              <Button size="sm" onClick={() => setAddParentModal(true)}>
-                <UserPlus className="w-3.5 h-3.5 mr-1.5" />
-                Veli Ekle
-              </Button>
-            </div>
-            {parents.length === 0 ? (
-              <p className="p-6 text-sm text-gray-500">Veli kaydı yok.</p>
-            ) : (
+            {/* Grup Atamaları */}
+            <div className="rounded-lg border bg-card overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/50">
+                <span className="text-sm font-medium text-foreground">Grup Atamaları</span>
+                <Button size="sm" onClick={() => setAddGroupModal(true)}>
+                  <Plus className="w-3.5 h-3.5 mr-1.5" />
+                  Gruba Ekle
+                </Button>
+              </div>
               <table className="min-w-full text-sm divide-y">
-                <thead className="bg-gray-50">
+                <thead className="bg-muted/50">
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Ad Soyad</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Telefon</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Yakınlık</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Birincil</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-600">İşlem</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Grup</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Başlangıç</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Bitiş</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Durum</th>
+                    <th className="px-4 py-3 text-center font-medium text-muted-foreground">İşlem</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {parents.map((ps: any) => (
-                    <tr key={ps.parent_profile_id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium">{ps.profiles?.full_name ?? '-'}</td>
-                      <td className="px-4 py-3 text-gray-600">{ps.profiles?.phone ?? '-'}</td>
-                      <td className="px-4 py-3 text-gray-600 capitalize">{ps.relation ?? '-'}</td>
+                  {studentGroups.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground text-sm">
+                        Grup ataması yok.
+                      </td>
+                    </tr>
+                  ) : studentGroups.map((sg: any) => (
+                    <tr key={sg.id} className="hover:bg-muted/50">
+                      <td className="px-4 py-3 font-medium">{sg.groups?.name}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{formatDate(sg.joined_at)}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{sg.left_at ? formatDate(sg.left_at) : '-'}</td>
                       <td className="px-4 py-3">
-                        {ps.is_primary ? <Badge variant="success">Birincil</Badge> : '-'}
+                        {sg.is_active
+                          ? <Badge variant="success">Aktif</Badge>
+                          : <Badge variant="secondary">Geçmiş</Badge>}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
-                          onClick={() => removeParent(ps.parent_profile_id, ps.profiles?.full_name ?? 'Veli')}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                        {sg.is_active && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-red-500 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => leaveGroup(sg.id, sg.groups?.name ?? 'Grup')}
+                          >
+                            Çıkar
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            )}
-          </div>
-        </TabsContent>
-
-        {/* ── GRUPLAR ───────────────────────────────────────────────────── */}
-        <TabsContent value="gruplar">
-          <div className="rounded-lg border bg-white overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
-              <span className="text-sm font-medium text-gray-700">Grup Atamaları</span>
-              <Button size="sm" onClick={() => setAddGroupModal(true)}>
-                <Plus className="w-3.5 h-3.5 mr-1.5" />
-                Gruba Ekle
-              </Button>
             </div>
-            <table className="min-w-full text-sm divide-y">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Grup</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Başlangıç</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Bitiş</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Durum</th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-600">İşlem</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {studentGroups.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-gray-400 text-sm">
-                      Grup ataması yok.
-                    </td>
-                  </tr>
-                ) : studentGroups.map((sg: any) => (
-                  <tr key={sg.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium">{sg.groups?.name}</td>
-                    <td className="px-4 py-3 text-gray-600">{formatDate(sg.joined_at)}</td>
-                    <td className="px-4 py-3 text-gray-600">{sg.left_at ? formatDate(sg.left_at) : '-'}</td>
-                    <td className="px-4 py-3">
-                      {sg.is_active
-                        ? <Badge variant="success">Aktif</Badge>
-                        : <Badge variant="secondary">Geçmiş</Badge>}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {sg.is_active && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs text-red-500 hover:text-red-600 hover:bg-red-50"
-                          onClick={() => leaveGroup(sg.id, sg.groups?.name ?? 'Grup')}
-                        >
-                          Çıkar
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+            {/* Bağlı Veliler */}
+            <div className="rounded-lg border bg-card overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/50">
+                <span className="text-sm font-medium text-foreground">Bağlı Veliler</span>
+                <Button size="sm" onClick={() => setAddParentModal(true)}>
+                  <UserPlus className="w-3.5 h-3.5 mr-1.5" />
+                  Veli Ekle
+                </Button>
+              </div>
+              {parents.length === 0 ? (
+                <p className="p-6 text-sm text-muted-foreground">Veli kaydı yok.</p>
+              ) : (
+                <div className="divide-y">
+                  {parents.map((ps: any) => (
+                    <div key={ps.parent_profile_id} className="px-5 py-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-medium text-foreground text-sm">{ps.profiles?.full_name ?? '-'}</p>
+                            {ps.is_primary && <Badge variant="success" className="text-xs">Birincil</Badge>}
+                            {ps.relation && (
+                              <Badge variant="secondary" className="text-xs capitalize">{ps.relation}</Badge>
+                            )}
+                          </div>
+                          {ps.profiles?.phone && (
+                            <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                              <Phone className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                              {ps.profiles.phone}
+                            </p>
+                          )}
+                          {ps.profiles?.email && (
+                            <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                              <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                              {ps.profiles.email}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() =>
+                              setEditParentTarget({
+                                id: ps.parent_profile_id,
+                                full_name: ps.profiles?.full_name ?? '',
+                                phone: ps.profiles?.phone ?? '',
+                                email: ps.profiles?.email ?? '',
+                              })
+                            }
+                          >
+                            <Pencil className="w-3 h-3 mr-1" />
+                            Düzenle
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => removeParent(ps.parent_profile_id, ps.profiles?.full_name ?? 'Veli')}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Notlar */}
+            <div className="rounded-lg border bg-card p-6 space-y-4">
+              <p className="text-sm font-semibold text-foreground">Notlar</p>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={5}
+                className="w-full rounded-md border border-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary resize-none"
+                placeholder="Öğrenci hakkında notlar…"
+              />
+              <div className="flex justify-end">
+                <Button onClick={saveNotes} disabled={savingNotes}>
+                  {savingNotes ? 'Kaydediliyor…' : 'Kaydet'}
+                </Button>
+              </div>
+            </div>
+
           </div>
         </TabsContent>
 
         {/* ── YOKLAMA ───────────────────────────────────────────────────── */}
         <TabsContent value="yoklama">
-          <div className="rounded-lg border bg-white p-4 space-y-5">
-            <div className="flex items-center gap-4 text-xs text-gray-500">
+          <div className="rounded-lg border bg-card p-4 space-y-5">
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-sm bg-green-200 inline-block" />Katıldı
               </span>
@@ -412,13 +462,13 @@ export default function StudentDetailTabs({
               </span>
             </div>
             {Object.keys(attendanceByMonth).length === 0 ? (
-              <p className="text-sm text-gray-400">Son 90 günde yoklama kaydı yok.</p>
+              <p className="text-sm text-muted-foreground">Son 90 günde yoklama kaydı yok.</p>
             ) : (
               Object.entries(attendanceByMonth).map(([monthKey, records]) => {
                 const [year, month] = monthKey.split('-')
                 return (
                   <div key={monthKey}>
-                    <p className="text-xs font-semibold text-gray-500 mb-2">
+                    <p className="text-xs font-semibold text-muted-foreground mb-2">
                       {MONTHS_TR[parseInt(month) - 1]} {year}
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -451,45 +501,51 @@ export default function StudentDetailTabs({
 
         {/* ── AİDAT ─────────────────────────────────────────────────────── */}
         <TabsContent value="aidat">
-          <div className="rounded-lg border bg-white overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-3 border-b bg-gray-50">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0"
-                onClick={() => setCurrentYear((y) => y - 1)}
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <span className="font-semibold text-sm min-w-[3.5rem] text-center">{currentYear}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0"
-                onClick={() => setCurrentYear((y) => y + 1)}
-              >
-                <ChevronRight className="w-4 h-4" />
+          <div className="rounded-lg border bg-card overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/50">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => setCurrentYear((y) => y - 1)}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="font-semibold text-sm min-w-[3.5rem] text-center">{currentYear}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => setCurrentYear((y) => y + 1)}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => setAddAidatModal(true)}>
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                Fatura Ekle
               </Button>
             </div>
             <table className="min-w-full text-sm divide-y">
-              <thead className="bg-gray-50">
+              <thead className="bg-muted/50">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Ay</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Tutar</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Ödenen</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Durum</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Vade</th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-600">İşlem</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Ay</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tutar</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Ödenen</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Durum</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Vade</th>
+                  <th className="px-4 py-3 text-center font-medium text-muted-foreground">İşlem</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => {
-                  const inv = aidatInvoices.find(
+                  const inv = localAidatInvoices.find(
                     (a: any) => a.period_year === currentYear && a.period_month === month
                   )
                   if (!inv) {
                     return (
-                      <tr key={month} className="text-gray-300">
+                      <tr key={month} className="text-muted-foreground/40">
                         <td className="px-4 py-2.5">{MONTHS_TR[month - 1]}</td>
                         <td className="px-4 py-2.5">—</td>
                         <td className="px-4 py-2.5">—</td>
@@ -500,7 +556,7 @@ export default function StudentDetailTabs({
                     )
                   }
                   return (
-                    <tr key={month} className="hover:bg-gray-50">
+                    <tr key={month} className="hover:bg-muted/50">
                       <td className="px-4 py-2.5 font-medium">
                         {MONTHS_TR[month - 1]}{inv.is_prorated ? ' ½' : ''}
                       </td>
@@ -519,18 +575,49 @@ export default function StudentDetailTabs({
                           {inv.status === 'paid' ? 'Ödendi' : inv.status === 'partial' ? 'Kısmi' : 'Bekliyor'}
                         </Badge>
                       </td>
-                      <td className="px-4 py-2.5 text-gray-500 text-xs">{formatDate(inv.due_date)}</td>
+                      <td className="px-4 py-2.5 text-muted-foreground text-xs">{formatDate(inv.due_date)}</td>
                       <td className="px-4 py-2.5 text-center">
-                        {inv.status !== 'paid' && (
+                        <div className="flex items-center justify-center gap-1">
+                          {inv.status !== 'paid' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={() => setPaymentModal(inv)}
+                            >
+                              Ödeme Al
+                            </Button>
+                          )}
                           <Button
+                            variant="ghost"
                             size="sm"
-                            variant="outline"
-                            className="h-7 text-xs"
-                            onClick={() => setPaymentModal(inv)}
+                            className="h-7 w-7 p-0"
+                            onClick={() => setEditAidatTarget(inv)}
                           >
-                            Ödeme Al
+                            <Pencil className="w-3.5 h-3.5" />
                           </Button>
-                        )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                            disabled={deletingAidatId === inv.id}
+                            onClick={async () => {
+                              if (!confirm(`${MONTHS_TR[month - 1]} ${currentYear} aidat faturası silinsin mi?`)) return
+                              setDeletingAidatId(inv.id)
+                              try {
+                                await deleteAidatInvoice(inv.id)
+                                setLocalAidatInvoices((prev) => prev.filter((a) => a.id !== inv.id))
+                                toast.success('Fatura silindi')
+                              } catch (err: any) {
+                                toast.error(err.message ?? 'Silinemedi')
+                              } finally {
+                                setDeletingAidatId(null)
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -542,31 +629,31 @@ export default function StudentDetailTabs({
 
         {/* ── FORMA / EŞOFMAN ───────────────────────────────────────────── */}
         <TabsContent value="forma">
-          <div className="rounded-lg border bg-white overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
-              <span className="text-sm font-medium text-gray-700">Forma / Eşofman</span>
+          <div className="rounded-lg border bg-card overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 bg-muted/50 border-b">
+              <span className="text-sm font-medium text-foreground">Forma / Eşofman</span>
               <Button size="sm" variant="outline" onClick={() => setAddEquipModal(true)}>
                 <Plus className="w-3.5 h-3.5 mr-1" />
                 Fatura Ekle
               </Button>
             </div>
             {equipInvoices.length === 0 ? (
-              <p className="p-6 text-sm text-gray-400">Forma / eşofman kaydı yok.</p>
+              <p className="p-6 text-sm text-muted-foreground">Forma / eşofman kaydı yok.</p>
             ) : (
               <table className="min-w-full text-sm divide-y">
-                <thead className="bg-gray-50">
+                <thead className="bg-muted/50">
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Açıklama</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Tutar</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Ödenen</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Ödeme Durumu</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Teslim</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">İşlemler</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Açıklama</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tutar</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Ödenen</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Ödeme Durumu</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Teslim</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">İşlemler</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {equipInvoices.map((inv: any) => (
-                    <tr key={inv.id} className="hover:bg-gray-50">
+                    <tr key={inv.id} className="hover:bg-muted/50">
                       <td className="px-4 py-3 font-medium">{inv.description ?? 'Forma'}</td>
                       <td className="px-4 py-3">{formatCurrency(inv.amount)}</td>
                       <td className="px-4 py-3">{formatCurrency(inv.paid_amount ?? 0)}</td>
@@ -584,7 +671,7 @@ export default function StudentDetailTabs({
                       <td className="px-4 py-3">
                         {inv.delivered
                           ? <span className="text-xs text-green-600 font-medium">{inv.delivered_at ? formatDate(inv.delivered_at) : 'Teslim Edildi'}</span>
-                          : <span className="text-xs text-gray-400">Teslim Edilmedi</span>}
+                          : <span className="text-xs text-muted-foreground">Teslim Edilmedi</span>}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
@@ -620,35 +707,36 @@ export default function StudentDetailTabs({
 
         {/* ── ÖDEME GEÇMİŞİ ─────────────────────────────────────────────── */}
         <TabsContent value="odemeler">
-          <div className="rounded-lg border bg-white overflow-hidden">
-            {payments.length === 0 ? (
-              <p className="p-6 text-sm text-gray-400">Ödeme kaydı yok.</p>
+          <div className="rounded-lg border bg-card overflow-hidden">
+            {localPayments.length === 0 ? (
+              <p className="p-6 text-sm text-muted-foreground">Ödeme kaydı yok.</p>
             ) : (
               <table className="min-w-full text-sm divide-y">
-                <thead className="bg-gray-50">
+                <thead className="bg-muted/50">
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Tarih</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Tutar</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Yöntem</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Tür</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Not</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-600">Dekont</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tarih</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tutar</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Yöntem</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tür</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Not</th>
+                    <th className="px-4 py-3 text-center font-medium text-muted-foreground">Dekont</th>
+                    <th className="px-4 py-3 text-center font-medium text-muted-foreground">İşlem</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {payments.map((p: any) => (
-                    <tr key={p.id} className="hover:bg-gray-50">
+                  {localPayments.map((p: any) => (
+                    <tr key={p.id} className="hover:bg-muted/50">
                       <td className="px-4 py-3">{formatDate(p.payment_date)}</td>
                       <td className="px-4 py-3 font-medium">{formatCurrency(p.amount)}</td>
-                      <td className="px-4 py-3 text-gray-600 capitalize">{p.payment_method ?? '-'}</td>
-                      <td className="px-4 py-3 text-gray-600">
+                      <td className="px-4 py-3 text-muted-foreground capitalize">{p.payment_method ?? '-'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
                         {p.invoice_type === 'aidat'
                           ? 'Aidat'
                           : p.invoice_type === 'equipment'
                           ? 'Forma'
                           : p.invoice_type ?? '-'}
                       </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">{p.notes ?? '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">{p.notes ?? '—'}</td>
                       <td className="px-4 py-3 text-center">
                         {p.receipt_url ? (
                           <a href={p.receipt_url} target="_blank" rel="noopener noreferrer">
@@ -657,8 +745,41 @@ export default function StudentDetailTabs({
                             </Button>
                           </a>
                         ) : (
-                          <span className="text-gray-300">—</span>
+                          <span className="text-muted-foreground/40">—</span>
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => setEditPaymentTarget(p)}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                            disabled={deletingPaymentId === p.id}
+                            onClick={async () => {
+                              if (!confirm('Bu ödeme kaydı silinsin mi?')) return
+                              setDeletingPaymentId(p.id)
+                              try {
+                                await deletePayment(p.id)
+                                setLocalPayments((prev) => prev.filter((x) => x.id !== p.id))
+                                toast.success('Ödeme silindi')
+                              } catch (err: any) {
+                                toast.error(err.message ?? 'Silinemedi')
+                              } finally {
+                                setDeletingPaymentId(null)
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -668,24 +789,6 @@ export default function StudentDetailTabs({
           </div>
         </TabsContent>
 
-        {/* ── NOTLAR / AUDİT ────────────────────────────────────────────── */}
-        <TabsContent value="notlar">
-          <div className="rounded-lg border bg-white p-6 space-y-4">
-            <p className="text-sm font-semibold text-gray-700">Notlar</p>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={6}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary resize-none"
-              placeholder="Öğrenci hakkında notlar…"
-            />
-            <div className="flex justify-end">
-              <Button onClick={saveNotes} disabled={savingNotes}>
-                {savingNotes ? 'Kaydediliyor…' : 'Kaydet'}
-              </Button>
-            </div>
-          </div>
-        </TabsContent>
       </Tabs>
 
       {/* ── Modals ─────────────────────────────────────────────────────── */}
@@ -729,6 +832,46 @@ export default function StudentDetailTabs({
         open={addEquipModal}
         onClose={() => setAddEquipModal(false)}
         onSuccess={(inv) => { setEquipInvoices((prev) => [...prev, inv]); setAddEquipModal(false) }}
+      />
+      <EditParentModal
+        target={editParentTarget}
+        onClose={() => setEditParentTarget(null)}
+        onSuccess={(updated) => {
+          setParents((prev) =>
+            prev.map((ps: any) =>
+              ps.parent_profile_id === updated.id
+                ? { ...ps, profiles: { ...ps.profiles, ...updated } }
+                : ps
+            )
+          )
+          setEditParentTarget(null)
+        }}
+      />
+      <AddAidatModal
+        studentId={student.id}
+        open={addAidatModal}
+        defaultYear={currentYear}
+        onClose={() => setAddAidatModal(false)}
+        onSuccess={(inv) => {
+          setLocalAidatInvoices((prev) => [...prev, inv])
+          setAddAidatModal(false)
+        }}
+      />
+      <EditAidatModal
+        invoice={editAidatTarget}
+        onClose={() => setEditAidatTarget(null)}
+        onSuccess={(updated) => {
+          setLocalAidatInvoices((prev) => prev.map((a) => a.id === updated.id ? { ...a, ...updated } : a))
+          setEditAidatTarget(null)
+        }}
+      />
+      <EditPaymentModal
+        payment={editPaymentTarget}
+        onClose={() => setEditPaymentTarget(null)}
+        onSuccess={(updated) => {
+          setLocalPayments((prev) => prev.map((p) => p.id === updated.id ? { ...p, ...updated } : p))
+          setEditPaymentTarget(null)
+        }}
       />
     </>
   )
@@ -793,9 +936,9 @@ function AidatPaymentModal({
         </DialogHeader>
         {invoice && (
           <>
-            <p className="text-sm text-gray-500 -mt-1">
+            <p className="text-sm text-muted-foreground -mt-1">
               {getMonthName(invoice.period_month)} {invoice.period_year} — Kalan:{' '}
-              <strong className="text-gray-900">{formatCurrency(remaining)}</strong>
+              <strong className="text-foreground">{formatCurrency(remaining)}</strong>
             </p>
             <form onSubmit={submit} className="space-y-3 mt-1">
               <div className="space-y-1.5">
@@ -821,7 +964,7 @@ function AidatPaymentModal({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Not <span className="text-gray-400 font-normal">(isteğe bağlı)</span></Label>
+                <Label>Not <span className="text-muted-foreground font-normal">(isteğe bağlı)</span></Label>
                 <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="…" />
               </div>
               <div className="flex justify-end gap-2 pt-1">
@@ -1008,7 +1151,7 @@ function AddGroupModal({
           <DialogTitle>Gruba Ekle</DialogTitle>
         </DialogHeader>
         {available.length === 0 ? (
-          <p className="text-sm text-gray-500 py-2">
+          <p className="text-sm text-muted-foreground py-2">
             Eklenebilecek grup yok. Tüm aktif gruplara zaten kayıtlı.
           </p>
         ) : (
@@ -1247,9 +1390,9 @@ function EquipPaymentModal({
         </DialogHeader>
         {invoice && (
           <>
-            <p className="text-sm text-gray-500 -mt-1">
+            <p className="text-sm text-muted-foreground -mt-1">
               {invoice.description ?? 'Forma'} — Kalan:{' '}
-              <strong className="text-gray-900">{formatCurrency(remaining)}</strong>
+              <strong className="text-foreground">{formatCurrency(remaining)}</strong>
             </p>
             <form onSubmit={submit} className="space-y-3 mt-1">
               <div className="space-y-1.5">
@@ -1273,6 +1416,341 @@ function EquipPaymentModal({
               </div>
             </form>
           </>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ============================================================================
+// EDIT PARENT MODAL
+// ============================================================================
+function EditParentModal({
+  target,
+  onClose,
+  onSuccess,
+}: {
+  target: { id: string; full_name: string; phone: string; email: string } | null
+  onClose: () => void
+  onSuccess: (updated: { id: string; full_name: string; phone: string; email: string }) => void
+}) {
+  const [fullName, setFullName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (target) {
+      setFullName(target.full_name)
+      setPhone(target.phone)
+      setEmail(target.email)
+    }
+  }, [target?.id])
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!target || !fullName.trim() || !phone.trim()) return
+    setLoading(true)
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('profiles')
+      .update({ full_name: fullName.trim(), phone: phone.trim(), email: email.trim() || null } as any)
+      .eq('id', target.id)
+    if (error) {
+      toast.error('Kaydedilemedi: ' + error.message)
+    } else {
+      toast.success('Veli bilgileri güncellendi')
+      onSuccess({ id: target.id, full_name: fullName.trim(), phone: phone.trim(), email: email.trim() })
+    }
+    setLoading(false)
+  }
+
+  return (
+    <Dialog open={!!target} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Veli Bilgilerini Düzenle</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-3 mt-1">
+          <div className="space-y-1.5">
+            <Label>Ad Soyad *</Label>
+            <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Telefon *</Label>
+            <Input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="5xxxxxxxxx"
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>E-posta</Label>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="isteğe bağlı"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={onClose}>İptal</Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Kaydediliyor…' : 'Kaydet'}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ============================================================================
+// ADD AIDAT INVOICE MODAL
+// ============================================================================
+function AddAidatModal({
+  studentId,
+  open,
+  defaultYear,
+  onClose,
+  onSuccess,
+}: {
+  studentId: string
+  open: boolean
+  defaultYear: number
+  onClose: () => void
+  onSuccess: (inv: any) => void
+}) {
+  const now = new Date()
+  const [year, setYear] = useState(String(defaultYear))
+  const [month, setMonth] = useState(String(now.getMonth() + 1))
+  const [amount, setAmount] = useState('')
+  const [dueDate, setDueDate] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (open) { setYear(String(defaultYear)); setAmount(''); setDueDate('') }
+  }, [open, defaultYear])
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    const amt = parseFloat(amount)
+    if (!amt || amt <= 0) return
+    setLoading(true)
+    try {
+      await createAidatInvoice({
+        student_id: studentId,
+        period_year: parseInt(year),
+        period_month: parseInt(month),
+        amount: amt,
+        due_date: dueDate || undefined,
+      })
+      toast.success('Fatura eklendi')
+      // Yeni oluşturulan faturayı optimistic olarak ekle
+      onSuccess({
+        id: crypto.randomUUID(),
+        student_id: studentId,
+        period_year: parseInt(year),
+        period_month: parseInt(month),
+        amount: amt,
+        paid_amount: 0,
+        status: 'pending',
+        due_date: dueDate || null,
+        is_prorated: false,
+      })
+    } catch (err: any) {
+      toast.error(err.message ?? 'Fatura eklenemedi')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Manuel Aidat Faturası</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-3 mt-1">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Yıl *</Label>
+              <Input type="number" value={year} onChange={(e) => setYear(e.target.value)} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Ay *</Label>
+              <Select value={month} onValueChange={setMonth}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MONTHS_TR.map((m, i) => (
+                    <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Tutar (₺) *</Label>
+            <Input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Vade Tarihi</Label>
+            <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" onClick={onClose}>İptal</Button>
+            <Button type="submit" disabled={loading}>{loading ? 'Ekleniyor…' : 'Ekle'}</Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ============================================================================
+// EDIT AIDAT INVOICE MODAL
+// ============================================================================
+function EditAidatModal({
+  invoice,
+  onClose,
+  onSuccess,
+}: {
+  invoice: any | null
+  onClose: () => void
+  onSuccess: (updated: any) => void
+}) {
+  const [amount, setAmount] = useState('')
+  const [dueDate, setDueDate] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (invoice) {
+      setAmount(String(invoice.amount ?? ''))
+      setDueDate(invoice.due_date ?? '')
+    }
+  }, [invoice?.id])
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!invoice) return
+    const amt = parseFloat(amount)
+    if (!amt || amt <= 0) { toast.error('Geçerli tutar girin'); return }
+    setLoading(true)
+    try {
+      await updateAidatInvoice(invoice.id, { amount: amt, due_date: dueDate || undefined })
+      toast.success('Fatura güncellendi')
+      onSuccess({ ...invoice, amount: amt, due_date: dueDate || null })
+    } catch (err: any) {
+      toast.error(err.message ?? 'Güncellenemedi')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!invoice} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Aidat Faturasını Düzenle</DialogTitle>
+        </DialogHeader>
+        {invoice && (
+          <form onSubmit={submit} className="space-y-3 mt-1">
+            <p className="text-sm text-muted-foreground">{MONTHS_TR[(invoice.period_month ?? 1) - 1]} {invoice.period_year}</p>
+            <div className="space-y-1.5">
+              <Label>Tutar (₺) *</Label>
+              <Input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Vade Tarihi</Label>
+              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={onClose}>İptal</Button>
+              <Button type="submit" disabled={loading}>{loading ? 'Kaydediliyor…' : 'Kaydet'}</Button>
+            </div>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ============================================================================
+// EDIT PAYMENT MODAL
+// ============================================================================
+function EditPaymentModal({
+  payment,
+  onClose,
+  onSuccess,
+}: {
+  payment: any | null
+  onClose: () => void
+  onSuccess: (updated: any) => void
+}) {
+  const [amount, setAmount] = useState('')
+  const [method, setMethod] = useState('nakit')
+  const [notes, setNotes] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (payment) {
+      setAmount(String(payment.amount ?? ''))
+      setMethod(payment.payment_method ?? 'nakit')
+      setNotes(payment.notes ?? '')
+    }
+  }, [payment?.id])
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!payment) return
+    const amt = parseFloat(amount)
+    if (!amt || amt <= 0) { toast.error('Geçerli tutar girin'); return }
+    setLoading(true)
+    try {
+      await updatePayment(payment.id, { amount: amt, payment_method: method, notes: notes || undefined })
+      toast.success('Ödeme güncellendi')
+      onSuccess({ ...payment, amount: amt, payment_method: method, notes: notes || null })
+    } catch (err: any) {
+      toast.error(err.message ?? 'Güncellenemedi')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!payment} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Ödemeyi Düzenle</DialogTitle>
+        </DialogHeader>
+        {payment && (
+          <form onSubmit={submit} className="space-y-3 mt-1">
+            <div className="space-y-1.5">
+              <Label>Tutar (₺) *</Label>
+              <Input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Ödeme Yöntemi</Label>
+              <Select value={method} onValueChange={setMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nakit">Nakit</SelectItem>
+                  <SelectItem value="kart">Kredi / Banka Kartı</SelectItem>
+                  <SelectItem value="havale">Havale / EFT</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Not</Label>
+              <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="İsteğe bağlı" />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={onClose}>İptal</Button>
+              <Button type="submit" disabled={loading}>{loading ? 'Kaydediliyor…' : 'Kaydet'}</Button>
+            </div>
+          </form>
         )}
       </DialogContent>
     </Dialog>

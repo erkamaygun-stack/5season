@@ -1,4 +1,5 @@
 'use client'
+// useState, useRouter: pasif/aktif toggle için
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -7,8 +8,23 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { formatDate, formatCurrency } from '@/lib/utils'
+import { Card, CardContent, CardHeader, CardTitle, CardAction } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { formatCurrency } from '@/lib/utils'
 import { UserX, UserCheck } from 'lucide-react'
+import AddStudentModal from './add-student-modal'
+
+interface Group {
+  id: string
+  name: string
+}
 
 interface StudentRow {
   id: string
@@ -28,138 +44,171 @@ interface StudentRow {
   }>
 }
 
-const statusBadge: Record<string, { label: string; variant: 'success' | 'warning' | 'secondary' }> = {
+const STATUS: Record<string, { label: string; variant: 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'outline' | 'ghost' | 'link' }> = {
   active: { label: 'Aktif', variant: 'success' },
   trial: { label: 'Deneme', variant: 'warning' },
   inactive: { label: 'Pasif', variant: 'secondary' },
 }
 
 function calcAge(birthDate: string | null): string {
-  if (!birthDate) return '-'
+  if (!birthDate) return '—'
   const birth = new Date(birthDate)
-  const today = new Date()
-  let age = today.getFullYear() - birth.getFullYear()
+  const now = new Date()
+  let age = now.getFullYear() - birth.getFullYear()
   if (
-    today.getMonth() < birth.getMonth() ||
-    (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())
-  ) age--
+    now.getMonth() < birth.getMonth() ||
+    (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())
+  )
+    age--
   return `${age}`
 }
 
-export default function StudentTable({ students }: { students: StudentRow[] }) {
+export default function StudentTable({
+  students,
+  groups,
+}: {
+  students: StudentRow[]
+  groups: Group[]
+}) {
   const router = useRouter()
   const [toggling, setToggling] = useState<string | null>(null)
 
-  async function deactivate(s: StudentRow) {
-    if (!confirm(`${s.full_name} pasife alınsın mı?`)) return
+  async function toggle(s: StudentRow) {
+    const goInactive = s.status !== 'inactive'
+    if (!confirm(`${s.full_name} ${goInactive ? 'pasife' : 'aktife'} alınsın mı?`)) return
     setToggling(s.id)
     const supabase = createClient()
-    const { error } = await supabase.from('students').update({ status: 'inactive' }).eq('id', s.id)
+    const { error } = await supabase
+      .from('students')
+      .update({ status: goInactive ? 'inactive' : 'active' })
+      .eq('id', s.id)
     if (error) toast.error('İşlem başarısız: ' + error.message)
-    else { toast.success(`${s.full_name} pasife alındı`); router.refresh() }
+    else {
+      toast.success(`${s.full_name} ${goInactive ? 'pasife' : 'aktife'} alındı`)
+      router.refresh()
+    }
     setToggling(null)
-  }
-
-  async function activate(s: StudentRow) {
-    if (!confirm(`${s.full_name} aktife alınsın mı?`)) return
-    setToggling(s.id)
-    const supabase = createClient()
-    const { error } = await supabase.from('students').update({ status: 'active' }).eq('id', s.id)
-    if (error) toast.error('İşlem başarısız: ' + error.message)
-    else { toast.success(`${s.full_name} aktife alındı`); router.refresh() }
-    setToggling(null)
-  }
-
-  if (students.length === 0) {
-    return (
-      <div className="rounded-lg border bg-white p-12 text-center text-sm text-gray-500">
-        Öğrenci bulunamadı.
-      </div>
-    )
   }
 
   return (
-    <div className="rounded-lg border bg-white overflow-hidden">
-      <table className="min-w-full divide-y divide-gray-200 text-sm">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-4 py-3 text-left font-medium text-gray-600 w-16">ID</th>
-            <th className="px-4 py-3 text-left font-medium text-gray-600">Ad Soyad</th>
-            <th className="px-4 py-3 text-left font-medium text-gray-600">Doğum / Yaş</th>
-            <th className="px-4 py-3 text-left font-medium text-gray-600">Veli</th>
-            <th className="px-4 py-3 text-left font-medium text-gray-600">Telefon</th>
-            <th className="px-4 py-3 text-left font-medium text-gray-600">Aktif Grup</th>
-            <th className="px-4 py-3 text-left font-medium text-gray-600">Forma</th>
-            <th className="px-4 py-3 text-right font-medium text-gray-600">Borç</th>
-            <th className="px-4 py-3 text-left font-medium text-gray-600">Durum</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {students.map((s) => {
-            const activeGroup = s.student_groups?.find((sg) => sg.is_active)
-            const primaryParent = s.parent_student?.find((ps) => ps.is_primary) ?? s.parent_student?.[0]
-            const { label, variant } = statusBadge[s.status] ?? { label: s.status, variant: 'secondary' as const }
-            const isInactive = s.status === 'inactive'
-            return (
-              <tr key={s.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 text-gray-400 font-mono text-xs">
-                  {s.id.slice(0, 6).toUpperCase()}
-                </td>
-                <td className="px-4 py-3">
-                  <Link href={`/ogrenciler/${s.id}`} className="font-medium text-primary hover:underline">
-                    {s.full_name}
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-gray-600">
-                  <div className="text-sm">{formatDate(s.birth_date)}</div>
-                  <div className="text-xs text-gray-400">{calcAge(s.birth_date)} yaş</div>
-                </td>
-                <td className="px-4 py-3 text-gray-700">{primaryParent?.profiles?.full_name ?? '-'}</td>
-                <td className="px-4 py-3 text-gray-600">{primaryParent?.profiles?.phone ?? '-'}</td>
-                <td className="px-4 py-3 text-gray-600">{activeGroup?.groups?.name ?? '-'}</td>
-                <td className="px-4 py-3">
-                  {s.has_received_uniform
-                    ? <Badge variant="success">Alındı</Badge>
-                    : <Badge variant="secondary">Alınmadı</Badge>}
-                </td>
-                <td className="px-4 py-3 text-right font-medium">
-                  {s.debt > 0
-                    ? <span className="text-red-600">{formatCurrency(s.debt)}</span>
-                    : <span className="text-xs text-green-600">Borçsuz</span>}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <Badge variant={variant}>{label}</Badge>
-                    {isInactive ? (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          Üyeler{' '}
+          <span className="font-normal text-muted-foreground text-sm">({students.length})</span>
+        </CardTitle>
+        <CardAction>
+          <AddStudentModal groups={groups} />
+        </CardAction>
+      </CardHeader>
+
+      <CardContent className="px-0 pb-0">
+        {students.length === 0 ? (
+          <p className="px-5 pb-5 text-sm text-muted-foreground">Öğrenci bulunamadı.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-5">Ad Soyad</TableHead>
+                <TableHead>Grup</TableHead>
+                <TableHead>Veli</TableHead>
+                <TableHead>Telefon</TableHead>
+                <TableHead>Yaş</TableHead>
+                <TableHead>Forma</TableHead>
+                <TableHead>Durum</TableHead>
+                <TableHead className="text-right">Borç</TableHead>
+                <TableHead className="pr-5" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {students.map((s) => {
+                const activeGroup = s.student_groups?.find((sg) => sg.is_active)
+                const primaryParent =
+                  s.parent_student?.find((ps) => ps.is_primary) ?? s.parent_student?.[0]
+                const { label, variant } =
+                  STATUS[s.status] ?? { label: s.status, variant: 'secondary' as const }
+
+                return (
+                  <TableRow key={s.id}>
+                    <TableCell className="pl-5">
+                      <Link
+                        href={`/ogrenciler/${s.id}`}
+                        className="font-medium hover:underline"
+                      >
+                        {s.full_name}
+                      </Link>
+                      <div className="text-xs text-muted-foreground font-mono">
+                        {s.id.slice(0, 6).toUpperCase()}
+                      </div>
+                    </TableCell>
+
+                    <TableCell className="text-muted-foreground">
+                      {activeGroup?.groups?.name ?? '—'}
+                    </TableCell>
+
+                    <TableCell className="text-muted-foreground">
+                      {primaryParent?.profiles?.full_name ?? '—'}
+                    </TableCell>
+
+                    <TableCell className="text-muted-foreground">
+                      {primaryParent?.profiles?.phone ?? '—'}
+                    </TableCell>
+
+                    <TableCell className="text-muted-foreground">
+                      {calcAge(s.birth_date)}
+                    </TableCell>
+
+                    <TableCell>
+                      {s.has_received_uniform ? (
+                        <Badge variant="success">Alındı</Badge>
+                      ) : (
+                        <Badge variant="secondary">Alınmadı</Badge>
+                      )}
+                    </TableCell>
+
+                    <TableCell>
+                      <Badge variant={variant}>{label}</Badge>
+                    </TableCell>
+
+                    <TableCell className="text-right">
+                      {s.debt > 0 ? (
+                        <span className="font-medium text-destructive">
+                          {formatCurrency(s.debt)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-green-600 dark:text-green-400">
+                          Borçsuz
+                        </span>
+                      )}
+                    </TableCell>
+
+                    <TableCell className="pr-5">
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-                        title="Aktife Al"
-                        onClick={() => activate(s)}
+                        className={`h-7 w-7 p-0 ${
+                          s.status === 'inactive'
+                            ? 'text-green-600 hover:text-green-700 hover:bg-green-50'
+                            : 'text-red-500 hover:text-red-700 hover:bg-red-50'
+                        }`}
+                        title={s.status === 'inactive' ? 'Aktife Al' : 'Pasife Al'}
+                        onClick={() => toggle(s)}
                         disabled={toggling === s.id}
                       >
-                        <UserCheck className="w-3.5 h-3.5" />
+                        {s.status === 'inactive' ? (
+                          <UserCheck className="w-3.5 h-3.5" />
+                        ) : (
+                          <UserX className="w-3.5 h-3.5" />
+                        )}
                       </Button>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                        title="Pasife Al"
-                        onClick={() => deactivate(s)}
-                        disabled={toggling === s.id}
-                      >
-                        <UserX className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
   )
 }
