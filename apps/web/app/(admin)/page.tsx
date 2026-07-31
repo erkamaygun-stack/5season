@@ -21,6 +21,7 @@ export default async function DashboardPage({
   const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth() + 1
+  const weekNum = Number(week)
 
   const [profileResult, groupsResult, coachesResult, weekData] = await Promise.all([
     supabase.from('profiles').select('full_name').eq('id', user!.id).single(),
@@ -34,7 +35,7 @@ export default async function DashboardPage({
       .eq('staff_type', 'coach')
       .eq('is_active', true)
       .order('full_name'),
-    getWeekData(supabase, Number(week ?? 0)),
+    getWeekData(supabase, Number.isFinite(weekNum) ? weekNum : 0),
   ])
 
   const fullName = (profileResult.data as any)?.full_name ?? 'Hoşgeldiniz'

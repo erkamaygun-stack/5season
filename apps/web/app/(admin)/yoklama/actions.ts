@@ -10,7 +10,7 @@ export async function markLeaveRequestSeen(id: string) {
     .update({ status: 'seen' } as any)
     .eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/yoklama')
+  revalidatePath('/gruplar/[id]', 'page')
 }
 
 export async function upsertAttendance(

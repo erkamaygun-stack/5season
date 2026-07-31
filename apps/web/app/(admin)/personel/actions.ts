@@ -82,7 +82,7 @@ export async function createStaff(data: {
 
   if (staffError) throw new Error(staffError.message)
 
-  revalidatePath('/personel')
+  revalidatePath('/finans')
 }
 
 export async function updateStaff(staffId: string, data: {
@@ -127,7 +127,7 @@ export async function deleteStaff(staffId: string, profileId?: string) {
     if (authError) throw new Error('Kayıt silindi fakat hesap silinemedi: ' + authError.message)
   }
 
-  revalidatePath('/personel')
+  revalidatePath('/finans')
 }
 
 export async function paySalary(data: {

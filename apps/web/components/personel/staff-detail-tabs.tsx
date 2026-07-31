@@ -275,7 +275,7 @@ export default function StaffDetailTabs({
     setDeleting(true)
     try {
       await deleteStaff(staff.id, staff.profile_id || undefined)
-      router.push('/personel')
+      router.push('/finans?tab=giderler')
     } catch (err: any) {
       toast.error(err.message ?? 'Silinemedi')
       setDeleting(false)

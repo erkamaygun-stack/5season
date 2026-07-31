@@ -46,6 +46,7 @@ export async function createGroup(data: {
   }
 
   revalidatePath('/gruplar')
+  revalidatePath('/')
 }
 
 export async function updateGroup(
@@ -73,6 +74,7 @@ export async function updateGroup(
 
   revalidatePath(`/gruplar/${id}`)
   revalidatePath('/gruplar')
+  revalidatePath('/')
 }
 
 export async function updateGroupColor(id: string, color: string) {
