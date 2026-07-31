@@ -5,9 +5,16 @@ import { Users, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import NotificationBar from '@/components/dashboard/notification-bar'
 import { getGroupColor } from '@/lib/group-colors'
 import AddGroupModal from '@/components/gruplar/add-group-modal'
+import TakvimClient from './takvim-client'
+import { getWeekData } from '@/lib/program-week'
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ week?: string }>
+}) {
   const supabase = await createClient()
+  const { week } = await searchParams
 
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -15,7 +22,7 @@ export default async function DashboardPage() {
   const year = now.getFullYear()
   const month = now.getMonth() + 1
 
-  const [profileResult, groupsResult, coachesResult] = await Promise.all([
+  const [profileResult, groupsResult, coachesResult, weekData] = await Promise.all([
     supabase.from('profiles').select('full_name').eq('id', user!.id).single(),
     supabase
       .from('groups')
@@ -27,6 +34,7 @@ export default async function DashboardPage() {
       .eq('staff_type', 'coach')
       .eq('is_active', true)
       .order('full_name'),
+    getWeekData(supabase, Number(week ?? 0)),
   ])
 
   const fullName = (profileResult.data as any)?.full_name ?? 'Hoşgeldiniz'
@@ -108,6 +116,11 @@ export default async function DashboardPage() {
           <p className="text-sm text-muted-foreground py-4">Henüz grup eklenmedi.</p>
         )}
       </div>
+
+      <Separator />
+
+      <h2 className="text-lg font-semibold text-foreground">Takvim</h2>
+      <TakvimClient {...weekData} />
     </div>
   )
 }

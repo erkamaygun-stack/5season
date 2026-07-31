@@ -156,5 +156,5 @@ export async function deleteGroup(id: string) {
   if (error) throw new Error(error.message)
 
   revalidatePath('/gruplar')
-  revalidatePath('/program')
+  revalidatePath('/')
 }

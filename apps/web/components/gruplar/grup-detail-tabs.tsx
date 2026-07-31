@@ -422,7 +422,7 @@ export default function GrupDetailTabs({
     setDeletingGroup(true)
     try {
       await deleteGroup(group.id)
-      router.push('/program?tab=gruplar')
+      router.push('/')
     } catch (err: any) {
       toast.error('Silinemedi: ' + (err?.message ?? 'Bilinmeyen hata'))
       setDeletingGroup(false)

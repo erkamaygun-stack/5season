@@ -29,7 +29,7 @@ type Props = {
   weekEnd: string
 }
 
-export default function ProgramClient({
+export default function TakvimClient({
   slots,
   sessions,
   weekDays,
@@ -78,19 +78,19 @@ export default function ProgramClient({
           {/* Week nav */}
           <div className="flex items-center gap-1">
             <a
-              href={`/program?week=${weekOffset - 1}`}
+              href={`/?week=${weekOffset - 1}`}
               className="rounded border border-border px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors"
             >
               ← Önceki
             </a>
             <a
-              href="/program"
+              href="/"
               className="rounded border border-border px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors"
             >
               Bugün
             </a>
             <a
-              href={`/program?week=${weekOffset + 1}`}
+              href={`/?week=${weekOffset + 1}`}
               className="rounded border border-border px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors"
             >
               Sonraki →
