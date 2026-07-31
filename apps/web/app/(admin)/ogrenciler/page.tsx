@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import StudentTable from '@/components/ogrenciler/student-table'
 import KanbanBoard from '@/components/basvurular/kanban-board'
+import GroupFilterChips from '@/components/ogrenciler/group-filter-chips'
 import UyelerTabNav from './tab-nav'
 
 const KANBAN_COLUMNS = [
@@ -15,9 +16,9 @@ const KANBAN_COLUMNS = [
 export default async function OgrencilerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>
+  searchParams: Promise<{ tab?: string; group_id?: string }>
 }) {
-  const { tab: rawTab } = await searchParams
+  const { tab: rawTab, group_id: groupId } = await searchParams
 
   const tab = rawTab === 'basvurular' ? 'basvurular' : 'uyeler'
   const supabase = await createClient()
@@ -73,11 +74,21 @@ export default async function OgrencilerPage({
       ...s,
       debt: debtMap[s.id] ?? 0,
     }))
+
+    if (groupId) {
+      studentsWithDebt = studentsWithDebt.filter((s) =>
+        (s.student_groups ?? []).some(
+          (sg: any) => sg.is_active && sg.groups?.id === groupId,
+        ),
+      )
+    }
   }
 
   return (
     <div className="space-y-4">
       <UyelerTabNav />
+
+      {tab === 'uyeler' && <GroupFilterChips groups={groups} />}
 
       {tab === 'uyeler' && (
         <StudentTable students={studentsWithDebt as any} groups={groups} />
