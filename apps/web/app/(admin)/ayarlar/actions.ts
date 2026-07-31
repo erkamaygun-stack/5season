@@ -22,7 +22,7 @@ export async function updateProfile(data: {
     .eq('id', user.id)
 
   if (error) throw new Error(error.message)
-  revalidatePath('/hesabim')
+  revalidatePath('/ayarlar')
 }
 
 export async function changePassword(newPassword: string) {
