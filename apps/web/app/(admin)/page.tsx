@@ -4,6 +4,7 @@ import { Separator } from '@/components/ui/separator'
 import { Users, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import NotificationBar from '@/components/dashboard/notification-bar'
 import { getGroupColor } from '@/lib/group-colors'
+import AddGroupModal from '@/components/gruplar/add-group-modal'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -14,16 +15,23 @@ export default async function DashboardPage() {
   const year = now.getFullYear()
   const month = now.getMonth() + 1
 
-  const [profileResult, groupsResult] = await Promise.all([
+  const [profileResult, groupsResult, coachesResult] = await Promise.all([
     supabase.from('profiles').select('full_name').eq('id', user!.id).single(),
     supabase
       .from('groups')
       .select('id, name, color, student_groups(student_id, is_active), staff(full_name)')
       .order('name'),
+    supabase
+      .from('staff')
+      .select('id, full_name')
+      .eq('staff_type', 'coach')
+      .eq('is_active', true)
+      .order('full_name'),
   ])
 
   const fullName = (profileResult.data as any)?.full_name ?? 'Hoşgeldiniz'
   const groups = (groupsResult.data ?? []) as any[]
+  const coaches = (coachesResult.data ?? []) as { id: string; full_name: string }[]
 
   const activeStudentIds = groups.flatMap((g) =>
     (g.student_groups ?? []).filter((sg: any) => sg.is_active).map((sg: any) => sg.student_id),
@@ -50,6 +58,11 @@ export default async function DashboardPage() {
       <NotificationBar />
 
       <Separator />
+
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-foreground">Gruplar</h2>
+        <AddGroupModal coaches={coaches} />
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {groups.map((g, i) => {
