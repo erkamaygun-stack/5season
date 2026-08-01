@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { TR_DAYS } from '@/lib/utils'
+import { GROUP_CATEGORIES } from '@/lib/group-categories'
 import { createGroup } from '@/app/(admin)/gruplar/actions'
 
 interface Coach {
@@ -29,6 +30,7 @@ export default function AddGroupModal({ coaches }: { coaches: Coach[] }) {
     name: '',
     monthly_fee: '',
     primary_coach_id: '',
+    category: GROUP_CATEGORIES[0].value as string,
   })
   const [slots, setSlots] = useState<Slot[]>([
     { day_of_week: '1', start_time: '16:00', end_time: '17:30' },
@@ -60,6 +62,7 @@ export default function AddGroupModal({ coaches }: { coaches: Coach[] }) {
           name: form.name.trim(),
           monthly_fee: form.monthly_fee ? Number(form.monthly_fee) : null,
           primary_coach_id: form.primary_coach_id || null,
+          category: form.category,
           slots: slots.map((s) => ({
             day_of_week: Number(s.day_of_week),
             start_time: s.start_time.length === 5 ? s.start_time + ':00' : s.start_time,
@@ -68,7 +71,7 @@ export default function AddGroupModal({ coaches }: { coaches: Coach[] }) {
         })
         toast.success(`${form.name} grubu oluşturuldu`)
         setOpen(false)
-        setForm({ name: '', monthly_fee: '', primary_coach_id: '' })
+        setForm({ name: '', monthly_fee: '', primary_coach_id: '', category: GROUP_CATEGORIES[0].value })
         setSlots([{ day_of_week: '1', start_time: '16:00', end_time: '17:30' }])
       } catch (err: any) {
         toast.error('Grup oluşturulamadı: ' + (err?.message ?? 'Bilinmeyen hata'))
@@ -94,6 +97,22 @@ export default function AddGroupModal({ coaches }: { coaches: Coach[] }) {
               placeholder="U10 Pazartesi-Çarşamba"
               required
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Kategori *</Label>
+            <Select value={form.category} onValueChange={(v) => set('category', v)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {GROUP_CATEGORIES.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-1.5">
