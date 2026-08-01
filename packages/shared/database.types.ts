@@ -171,6 +171,7 @@ export type Database = {
           capacity: number | null
           primary_coach_id: string | null
           monthly_fee: number | null
+          category: string
           is_active: boolean | null
           created_at: string | null
         }
@@ -178,6 +179,7 @@ export type Database = {
           id?: string; school_id: string; name: string
           age_min?: number | null; age_max?: number | null; capacity?: number | null
           primary_coach_id?: string | null; monthly_fee?: number | null
+          category?: string
           is_active?: boolean | null; created_at?: string | null
         }
         Update: Partial<Database['public']['Tables']['groups']['Insert']>
