@@ -20,6 +20,7 @@ export async function createGroup(data: {
   name: string
   monthly_fee?: number | null
   primary_coach_id?: string | null
+  category: string
   slots: Array<{ day_of_week: number; start_time: string; end_time: string }>
 }) {
   const { supabase, school_id } = await getContext()
@@ -31,6 +32,7 @@ export async function createGroup(data: {
       name: data.name,
       monthly_fee: data.monthly_fee ?? null,
       primary_coach_id: data.primary_coach_id ?? null,
+      category: data.category,
       is_active: true,
     } as any)
     .select('id')
@@ -55,6 +57,7 @@ export async function updateGroup(
     name: string
     monthly_fee?: number | null
     primary_coach_id?: string | null
+    category: string
     is_active: boolean
   }
 ) {
@@ -66,6 +69,7 @@ export async function updateGroup(
       name: data.name,
       monthly_fee: data.monthly_fee ?? null,
       primary_coach_id: data.primary_coach_id ?? null,
+      category: data.category,
       is_active: data.is_active,
     } as any)
     .eq('id', id)
