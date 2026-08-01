@@ -4,10 +4,12 @@
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { GROUP_CATEGORIES } from '@/lib/group-categories'
 
 interface Group {
   id: string
   name: string
+  category: string
 }
 
 export default function GroupFilterChips({ groups }: { groups: Group[] }) {
@@ -21,33 +23,37 @@ export default function GroupFilterChips({ groups }: { groups: Group[] }) {
     return `/ogrenciler?${params.toString()}`
   }
 
+  function chipClass(isActive: boolean) {
+    return cn(
+      'px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
+      isActive
+        ? 'bg-primary text-primary-foreground'
+        : 'bg-muted text-muted-foreground hover:bg-muted/70'
+    )
+  }
+
   return (
-    <div className="flex flex-wrap gap-2">
-      <Link
-        href={chipHref(null)}
-        className={cn(
-          'px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
-          !activeGroupId
-            ? 'bg-primary text-primary-foreground'
-            : 'bg-muted text-muted-foreground hover:bg-muted/70'
-        )}
-      >
+    <div className="space-y-2">
+      <Link href={chipHref(null)} className={chipClass(!activeGroupId)}>
         Tümü
       </Link>
-      {groups.map((g) => (
-        <Link
-          key={g.id}
-          href={chipHref(g.id)}
-          className={cn(
-            'px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
-            activeGroupId === g.id
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted text-muted-foreground hover:bg-muted/70'
-          )}
-        >
-          {g.name}
-        </Link>
-      ))}
+      {GROUP_CATEGORIES.map((cat) => {
+        const catGroups = groups.filter((g) => g.category === cat.value)
+        if (catGroups.length === 0) return null
+
+        return (
+          <div key={cat.value} className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground w-20 shrink-0">
+              {cat.label}
+            </span>
+            {catGroups.map((g) => (
+              <Link key={g.id} href={chipHref(g.id)} className={chipClass(activeGroupId === g.id)}>
+                {g.name}
+              </Link>
+            ))}
+          </div>
+        )
+      })}
     </div>
   )
 }

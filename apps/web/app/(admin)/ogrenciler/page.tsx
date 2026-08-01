@@ -42,7 +42,7 @@ export default async function OgrencilerPage({
   if (tab === 'uyeler') {
     const { data: groupsData } = await supabase
       .from('groups')
-      .select('id, name')
+      .select('id, name, category')
       .order('name')
     groups = groupsData ?? []
 
