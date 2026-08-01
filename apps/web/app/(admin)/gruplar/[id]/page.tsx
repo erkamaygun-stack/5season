@@ -17,7 +17,7 @@ export default async function GrupDetailPage({
       supabase
         .from('groups')
         .select(`
-          id, name, monthly_fee, is_active, primary_coach_id, color,
+          id, name, monthly_fee, is_active, primary_coach_id, color, category,
           staff(id, full_name),
           group_schedule_slots(id, day_of_week, start_time, end_time),
           student_groups(id, is_active, joined_at, left_at, students(id, full_name, status))

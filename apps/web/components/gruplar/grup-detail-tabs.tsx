@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { formatCurrency, formatDate, TR_DAYS } from '@/lib/utils'
 import { Pencil, Plus, Trash2, UserMinus, Check } from 'lucide-react'
 import { GROUP_COLORS } from '@/lib/group-colors'
+import { GROUP_CATEGORIES, getGroupCategoryLabel } from '@/lib/group-categories'
 import {
   updateGroup,
   updateGroupColor,
@@ -48,6 +49,7 @@ interface Group {
   monthly_fee: number | null
   is_active: boolean | null
   primary_coach_id: string | null
+  category: string
   color: string | null
   staff: { id: string; full_name: string } | null
   group_schedule_slots: Slot[]
@@ -96,6 +98,7 @@ function EditGroupModal({
     name: group.name,
     monthly_fee: group.monthly_fee != null ? String(group.monthly_fee) : '',
     primary_coach_id: group.primary_coach_id ?? '',
+    category: group.category,
     is_active: group.is_active !== false ? 'active' : 'inactive',
   })
 
@@ -112,6 +115,7 @@ function EditGroupModal({
           name: form.name.trim(),
           monthly_fee: form.monthly_fee ? Number(form.monthly_fee) : null,
           primary_coach_id: form.primary_coach_id || null,
+          category: form.category,
           is_active: form.is_active === 'active',
         })
         toast.success('Grup bilgileri güncellendi')
@@ -119,6 +123,7 @@ function EditGroupModal({
           name: form.name.trim(),
           monthly_fee: form.monthly_fee ? Number(form.monthly_fee) : null,
           primary_coach_id: form.primary_coach_id || null,
+          category: form.category,
           is_active: form.is_active === 'active',
         })
       } catch (err: any) {
@@ -158,6 +163,21 @@ function EditGroupModal({
                 {coaches.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Kategori</Label>
+            <Select value={form.category} onValueChange={(v) => set('category', v)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {GROUP_CATEGORIES.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -502,6 +522,7 @@ export default function GrupDetailTabs({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 {([
                   ['Grup Adı', group.name],
+                  ['Kategori', getGroupCategoryLabel(group.category)],
                   ['Antrenör', coachName],
                   ['Aylık Ücret', formatCurrency(group.monthly_fee)],
                   ['Durum', group.is_active !== false ? 'Aktif' : 'Pasif'],
