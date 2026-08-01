@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { TR_DAYS } from '@/lib/utils'
-import { GROUP_CATEGORIES } from '@/lib/group-categories'
+import { GROUP_CATEGORIES, type GroupCategory } from '@/lib/group-categories'
 import { createGroup } from '@/app/(admin)/gruplar/actions'
 
 interface Coach {
@@ -26,11 +26,16 @@ interface Slot {
 export default function AddGroupModal({ coaches }: { coaches: Coach[] }) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    name: string
+    monthly_fee: string
+    primary_coach_id: string
+    category: GroupCategory
+  }>({
     name: '',
     monthly_fee: '',
     primary_coach_id: '',
-    category: GROUP_CATEGORIES[0].value as string,
+    category: GROUP_CATEGORIES[0].value,
   })
   const [slots, setSlots] = useState<Slot[]>([
     { day_of_week: '1', start_time: '16:00', end_time: '17:30' },

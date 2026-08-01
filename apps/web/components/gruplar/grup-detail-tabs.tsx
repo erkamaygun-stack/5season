@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { formatCurrency, formatDate, TR_DAYS } from '@/lib/utils'
 import { Pencil, Plus, Trash2, UserMinus, Check } from 'lucide-react'
 import { GROUP_COLORS } from '@/lib/group-colors'
-import { GROUP_CATEGORIES, getGroupCategoryLabel } from '@/lib/group-categories'
+import { GROUP_CATEGORIES, getGroupCategoryLabel, type GroupCategory } from '@/lib/group-categories'
 import {
   updateGroup,
   updateGroupColor,
@@ -115,7 +115,7 @@ function EditGroupModal({
           name: form.name.trim(),
           monthly_fee: form.monthly_fee ? Number(form.monthly_fee) : null,
           primary_coach_id: form.primary_coach_id || null,
-          category: form.category,
+          category: form.category as GroupCategory,
           is_active: form.is_active === 'active',
         })
         toast.success('Grup bilgileri güncellendi')

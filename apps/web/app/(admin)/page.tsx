@@ -4,7 +4,7 @@ import { Separator } from '@/components/ui/separator'
 import { Users, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import NotificationBar from '@/components/dashboard/notification-bar'
 import { getGroupColor } from '@/lib/group-colors'
-import { GROUP_CATEGORIES } from '@/lib/group-categories'
+import { GROUP_CATEGORIES, normalizeGroupCategory } from '@/lib/group-categories'
 import AddGroupModal from '@/components/gruplar/add-group-modal'
 import TakvimClient from './takvim-client'
 import { getWeekData } from '@/lib/program-week'
@@ -74,7 +74,7 @@ export default async function DashboardPage({
       </div>
 
       {GROUP_CATEGORIES.map((cat) => {
-        const catGroups = groups.filter((g) => (g.category ?? GROUP_CATEGORIES[0].value) === cat.value)
+        const catGroups = groups.filter((g) => normalizeGroupCategory(g.category) === cat.value)
 
         return (
           <div key={cat.value} className="space-y-4">

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import type { GroupCategory } from '@/lib/group-categories'
 
 async function getContext() {
   const supabase = await createClient()
@@ -20,7 +21,7 @@ export async function createGroup(data: {
   name: string
   monthly_fee?: number | null
   primary_coach_id?: string | null
-  category: string
+  category: GroupCategory
   slots: Array<{ day_of_week: number; start_time: string; end_time: string }>
 }) {
   const { supabase, school_id } = await getContext()
@@ -57,7 +58,7 @@ export async function updateGroup(
     name: string
     monthly_fee?: number | null
     primary_coach_id?: string | null
-    category: string
+    category: GroupCategory
     is_active: boolean
   }
 ) {
