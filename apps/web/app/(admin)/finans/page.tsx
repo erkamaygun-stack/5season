@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { formatCurrency, getMonthName, TR_MONTHS, nMonthsAgo } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,13 @@ import FinansTabNav from './tab-nav'
 
 type Tab = 'aidat' | 'dekontlar' | 'giderler' | 'raporlar'
 
+function maskPhone(value: string | null | undefined): string {
+  if (!value) return '—'
+  const digits = value.replace(/\D/g, '')
+  if (digits.length < 6) return '***'
+  return `+${digits.slice(0, 2)} *** *** ${digits.slice(-2)}`
+}
+
 export default async function FinansPage({
   searchParams,
 }: {
@@ -25,11 +33,10 @@ export default async function FinansPage({
   const tab = (['aidat', 'dekontlar', 'giderler', 'raporlar'].includes(tabParam) ? tabParam : 'aidat') as Tab
 
   // Bekleyen dekont sayısı — her tab'da göster
-  const { count: pendingCount } = await supabase
-    .from('payments')
+  const { count: pendingCount } = await (supabase as any)
+    .from('receipt_submissions')
     .select('id', { count: 'exact', head: true })
-    .eq('amount', 0)
-    .not('receipt_url', 'is', null)
+    .eq('status', 'pending_review')
 
   // ── Aidat ──────────────────────────────────────────────────────────────────
   let aidatContent = null
@@ -65,22 +72,21 @@ export default async function FinansPage({
   // ── Dekontlar ──────────────────────────────────────────────────────────────
   let dekontlarContent = null
   if (tab === 'dekontlar') {
-    const { data: payments } = await supabase
-      .from('payments')
-      .select('id, invoice_type, invoice_id, student_id, receipt_url, created_at, students(full_name)')
-      .eq('amount', 0)
-      .not('receipt_url', 'is', null)
+    const { data: submissions } = await (supabase as any)
+      .from('receipt_submissions')
+      .select('id, invoice_type, invoice_id, student_id, storage_bucket, storage_path, created_at, students(full_name), guardians(full_name, phone_e164)')
+      .eq('status', 'pending_review')
       .order('created_at', { ascending: false })
 
-    if (!payments || payments.length === 0) {
+    if (!submissions || submissions.length === 0) {
       dekontlarContent = (
         <div className="rounded-lg border bg-card p-12 text-center text-sm text-muted-foreground">
           Onay bekleyen dekont yok.
         </div>
       )
     } else {
-      const aidatIds = payments.filter((p) => p.invoice_type === 'aidat').map((p) => p.invoice_id)
-      const equipIds = payments.filter((p) => p.invoice_type === 'equipment').map((p) => p.invoice_id)
+      const aidatIds = submissions.filter((p: any) => p.invoice_type === 'aidat').map((p: any) => p.invoice_id)
+      const equipIds = submissions.filter((p: any) => p.invoice_type === 'equipment').map((p: any) => p.invoice_id)
 
       const [aidatRes, equipRes] = await Promise.all([
         aidatIds.length > 0
@@ -93,12 +99,15 @@ export default async function FinansPage({
 
       const aidatMap = Object.fromEntries((aidatRes.data ?? []).map((i: any) => [i.id, i]))
       const equipMap = Object.fromEntries((equipRes.data ?? []).map((i: any) => [i.id, i]))
+      const admin = createAdminClient()
 
       const dekontlar = await Promise.all(
-        payments.map(async (p: any) => {
-          const { data: urlData } = await supabase.storage
-            .from('receipts')
-            .createSignedUrl(p.receipt_url, 3600)
+        submissions.map(async (p: any) => {
+          const urlResult = p.storage_path
+            ? await admin.storage
+                .from(p.storage_bucket || 'whatsapp-receipts')
+                .createSignedUrl(p.storage_path, 300)
+            : { data: null }
 
           const invoice = p.invoice_type === 'aidat' ? aidatMap[p.invoice_id] : equipMap[p.invoice_id]
           const invoiceLabel =
@@ -114,8 +123,10 @@ export default async function FinansPage({
             invoiceId: p.invoice_id,
             invoiceLabel,
             invoiceAmount: Number(invoice?.amount ?? 0),
-            signedUrl: urlData?.signedUrl ?? null,
+            signedUrl: urlResult.data?.signedUrl ?? null,
             createdAt: p.created_at,
+            guardianName: p.guardians?.full_name ?? 'Eşleşmemiş veli',
+            guardianPhoneMasked: maskPhone(p.guardians?.phone_e164),
           }
         })
       )

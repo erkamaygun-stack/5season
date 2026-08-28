@@ -23,6 +23,8 @@ type Dekont = {
   invoiceAmount: number
   signedUrl: string | null
   createdAt: string
+  guardianName: string
+  guardianPhoneMasked: string
 }
 
 function ApproveModal({
@@ -44,7 +46,7 @@ function ApproveModal({
 
     startTransition(async () => {
       try {
-        await approveReceipt({ paymentId: dekont.id, amount: parsed, paymentMethod: method, notes: notes || undefined })
+        await approveReceipt({ submissionId: dekont.id, amount: parsed, paymentMethod: method, notes: notes || undefined })
         toast.success('Dekont onaylandı, ödeme kaydedildi')
         onClose()
       } catch (err: any) {
@@ -62,6 +64,7 @@ function ApproveModal({
 
         <div className="rounded-md bg-gray-50 p-4 text-sm space-y-1 mb-2">
           <p><span className="text-gray-500">Öğrenci:</span> <span className="font-medium">{dekont.studentName}</span></p>
+          <p><span className="text-gray-500">Veli:</span> {dekont.guardianName} · {dekont.guardianPhoneMasked}</p>
           <p><span className="text-gray-500">Fatura:</span> {dekont.invoiceLabel}</p>
           <p><span className="text-gray-500">Fatura tutarı:</span> {formatCurrency(dekont.invoiceAmount)}</p>
         </div>

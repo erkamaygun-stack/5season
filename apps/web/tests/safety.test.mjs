@@ -13,6 +13,11 @@ import {
   evaluateOutboundPolicy,
   parseOutboundDeliveryMode,
 } from '../lib/safety/outbound-policy.ts'
+import {
+  assertReceiptTransition,
+  canTransitionReceipt,
+} from '../lib/domain/receipt-state.ts'
+import { createWhatsAppProvider } from '../lib/integrations/whatsapp/provider.ts'
 
 const LOCAL_KEY = 'local-anon-key'
 
@@ -133,4 +138,36 @@ test('allowlist mode rejects every recipient not explicitly listed', () => {
     purposeCode: 'receipt_result',
     consentOrLegalBasisConfirmed: true,
   }), { allowed: false, reason: 'recipient_not_allowlisted' })
+})
+
+test('receipt state machine accepts the review-cleanup path and rejects shortcuts', () => {
+  assert.equal(canTransitionReceipt('received', 'identifying'), true)
+  assert.equal(canTransitionReceipt('identifying', 'pending_review'), true)
+  assert.equal(canTransitionReceipt('pending_review', 'cleanup_pending'), true)
+  assert.equal(canTransitionReceipt('cleanup_pending', 'completed'), true)
+  assert.equal(canTransitionReceipt('received', 'completed'), false)
+  assert.throws(() => assertReceiptTransition('pending_review', 'completed'), /invalid_receipt_transition/)
+})
+
+test('WhatsApp provider is disabled by default and sink performs no transport', async () => {
+  await assert.rejects(
+    () => createWhatsAppProvider('disabled').sendTemplate({
+      recipient: '+905550000000',
+      templateName: 'receipt_result',
+      languageCode: 'tr',
+      variables: {},
+      idempotencyKey: 'submission-1',
+    }),
+    /whatsapp_provider_disabled/,
+  )
+
+  const result = await createWhatsAppProvider('sink').sendTemplate({
+    recipient: '+905550000000',
+    templateName: 'receipt_result',
+    languageCode: 'tr',
+    variables: {},
+    idempotencyKey: 'submission-1',
+  })
+  assert.equal(result.providerMessageId, 'sink:submission-1')
+  assert.throws(() => createWhatsAppProvider('production'), /live_provider_not_configured/)
 })
