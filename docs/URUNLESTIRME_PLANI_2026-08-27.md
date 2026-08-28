@@ -1,9 +1,34 @@
 # 5mevsim Ürünleştirme Planı — WhatsApp Merkezli Revizyon
 
 **Tarih:** 27 Ağustos 2026  
-**Durum:** Plan tamamlandı; uygulama yeni kullanıcı talimatını bekliyor  
+**Durum:** Güvenli gece paketi yerel branch'te tamamlandı; migration uygulaması, staging, production ve gerçek gönderim kapalı
 **Başlangıç varsayımı:** İlk hedef tek okulda kontrollü pilot; çok kiracılı altyapı korunur.  
-**Kural:** Bu belge onaylanmadan kaynak kodu, bağlı Supabase projesi veya canlı veri üzerinde uygulamaya başlanmaz.
+**Kural:** Production Supabase, gerçek veri, dış bildirim, deploy ve push ancak ayrıca ve açıkça yetkilendirilmiş release sürecinde ele alınır.
+
+## 0. Uygulama durumu — 28 Ağustos 2026
+
+Bu planın ilk güvenli paketi `codex/safe-overnight-20260828` branch'inde, yalnızca yerel kod ve sentetik/localhost yapılandırmasıyla uygulanmıştır.
+
+Tamamlananlar:
+
+- Production hedefini development/preview/staging'de fail-closed engelleyen ortam doğrulaması ve varsayılan açık veri koruma modu.
+- Varsayılan kapalı dış-gönderim policy'si; yalnızca `disabled` ve ağ çağrısı yapmayan `sink` WhatsApp sağlayıcısı.
+- Mobil SMS OTP, veli route/servisleri, push/dekont bağımlılıkları ve sabit veli parolası akışının kaldırılması.
+- Antrenör mobil uygulamasının e-posta/parola girişine geçirilmesi; personel davet metadatası ve güvenli davet sınırı.
+- Auth hesabı olmayan `guardians` modeli, WhatsApp kanal/konuşma/mesaj, bekleyen dekont ve outbox şeması.
+- Bekleyen dekont admin inceleme ekranı, atomik ödeme/dekont karar RPC'si ve karar sonrası `cleanup_pending` akışı.
+- Öğrenci/personel için fiziksel silme yerine arşivleme; ödeme yazmalarında tenant doğrulayan RPC ve iptal kaydı.
+- Web build/typecheck, 11 güvenlik testi; mobil Expo Doctor 18/18, typecheck ve Android bundle export doğrulaması.
+
+Bilerek tamamlanmayan ve kapalı kalanlar:
+
+- Migration hiçbir veritabanına uygulanmadı. Docker motoru WSL2/sanallaştırma eksikliği nedeniyle çalışmadığından gerçek PostgreSQL migration/RLS testi yapılmadı.
+- Legacy veli/telefon verisi okunmadı, kopyalanmadı veya silinmedi. Yeni şema migration'ı eski satırları korur; panel yeni `guardians` modelini kullanır.
+- Meta webhook'u, canlı sağlayıcı, worker, Storage temizleme işi, SMTP teslimatı ve gerçek alıcı gönderimi uygulanmadı/açılmadı.
+- Hukuk ve uyum kapısı kapanmadı; Meta/Supabase yurt dışı aktarım mekanizması ile dekont saklama sınıflandırması yazılı onay bekler.
+- Production deploy, migration, veri erişimi, dış mesaj ve git push yapılmadı.
+
+Ayrıntılı sonuç ve kalan kapılar: `docs/GECE_CALISMA_RAPORU_2026-08-28.md` ve `docs/STAGING_RELEASE_CHECKLIST.md`.
 
 ## 1. Onaylanan ürün yönü
 
