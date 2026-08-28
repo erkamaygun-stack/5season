@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { assertOutboundSystemEnabled } from '@/lib/safety/outbound-policy'
 
 // database.types.ts henüz `generate_sessions_for_range` RPC'sini içermiyor
 // (migration sonrası `supabase gen types` yeniden çalıştırılınca `any` kaldırılabilir).
@@ -39,6 +40,9 @@ export async function dismissAbsence(recordId: string) {
 }
 
 export async function notifyAbsenceParent(recordId: string) {
+  // Varsayılan kapalı dış gönderim kilidini herhangi bir veli verisi okunmadan önce uygula.
+  assertOutboundSystemEnabled()
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Oturum bulunamadı')

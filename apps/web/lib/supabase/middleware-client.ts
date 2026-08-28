@@ -1,14 +1,18 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 import type { Database } from '@/lib/database.types'
+import { getWebSupabaseConfig } from '@/lib/safety/environment'
+import { createProtectedFetch } from '@/lib/safety/protected-fetch'
 
 export function createMiddlewareClient(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
+  const config = getWebSupabaseConfig()
 
   const supabase = createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    config.url,
+    config.anonKey,
     {
+      global: { fetch: createProtectedFetch() },
       cookies: {
         getAll() {
           return request.cookies.getAll()
