@@ -43,6 +43,19 @@ OUTBOUND_DELIVERY_MODE=disabled
 
 Staging/local ortamında sentetik veriyle yazma testi yapılacağı zaman iki değişken de açıkça `false` olmalıdır. Production panelinde koruma kaldırılması ayrı release kararıdır.
 
+## Gerçek veriyi salt-okunur yerel test etme
+
+Mevcut production kayıtlarını yalnızca ekran ve rapor doğrulaması için görmek gerektiğinde normal `npm run dev` yerine aşağıdaki kontrollü komut kullanılır:
+
+```powershell
+cd apps/web
+npm run dev:real-data:readonly
+```
+
+Bu komut mevcut Supabase hedefini çalışma süresince korunan hedef olarak işaretler, uygulamayı development modunda tutar, bütün veri mutasyonlarını fail-closed engeller, dış gönderimi `disabled` yapar ve service-role kullanımını kapatır. E-posta/parola girişi, çıkış, GET sorguları ve private belge için kısa ömürlü signed URL üretimi çalışabilir. Kaydetme, silme, Auth güncelleme, RPC, Storage yükleme/silme ve Edge Function çağrıları engellenir.
+
+Bu mod gerçek veri üzerinde yazma testi için kullanılmaz. Yazma/E2E testleri yalnızca sentetik local veya izole staging veritabanında yapılır.
+
 ## Dış gönderim modu
 
 `OUTBOUND_DELIVERY_MODE` varsayılan olarak `disabled` kabul edilir:

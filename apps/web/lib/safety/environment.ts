@@ -5,6 +5,8 @@ type SupabaseTargetInput = {
   anonKey: string | undefined
   appEnvironment: AppEnvironment
   protectedProjectRefs: string | undefined
+  realDataTestMode?: string | undefined
+  protectedDataMode?: string | undefined
 }
 
 export type SafeSupabaseConfig = {
@@ -13,6 +15,7 @@ export type SafeSupabaseConfig = {
   appEnvironment: AppEnvironment
   projectRef: string | null
   isLocal: boolean
+  isReadOnlyRealDataTest: boolean
 }
 
 const LOCAL_SUPABASE_HOSTS = new Set(['127.0.0.1', 'localhost', 'host.docker.internal'])
@@ -51,6 +54,15 @@ export function assertSafeSupabaseTarget(input: SupabaseTargetInput): SafeSupaba
 
   const isLocal = isLocalSupabaseUrl(input.url)
   const projectRef = getSupabaseProjectRef(input.url)
+  const isReadOnlyRealDataTest = input.realDataTestMode === 'read_only'
+
+  if (input.realDataTestMode && !isReadOnlyRealDataTest) {
+    throw new Error('invalid_real_data_test_mode')
+  }
+
+  if (isReadOnlyRealDataTest && input.protectedDataMode === 'false') {
+    throw new Error('real_data_test_requires_protected_mode')
+  }
 
   if (input.appEnvironment !== 'production' && !isLocal) {
     const protectedRefs = parseProtectedRefs(input.protectedProjectRefs)
@@ -66,7 +78,11 @@ export function assertSafeSupabaseTarget(input: SupabaseTargetInput): SafeSupaba
       throw new Error('unrecognized_remote_supabase_target')
     }
 
-    if (protectedRefs.has(projectRef)) {
+    if (isReadOnlyRealDataTest) {
+      if (!protectedRefs.has(projectRef)) {
+        throw new Error('real_data_test_target_not_protected')
+      }
+    } else if (protectedRefs.has(projectRef)) {
       throw new Error('protected_supabase_target_blocked')
     }
   }
@@ -77,6 +93,7 @@ export function assertSafeSupabaseTarget(input: SupabaseTargetInput): SafeSupaba
     appEnvironment: input.appEnvironment,
     projectRef,
     isLocal,
+    isReadOnlyRealDataTest,
   }
 }
 
@@ -97,5 +114,11 @@ export function getWebSupabaseConfig(): SafeSupabaseConfig {
     anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     appEnvironment: resolveAppEnvironment(),
     protectedProjectRefs: process.env.NEXT_PUBLIC_PROTECTED_SUPABASE_PROJECT_REFS,
+    realDataTestMode: process.env.NEXT_PUBLIC_REAL_DATA_TEST_MODE,
+    protectedDataMode: process.env.NEXT_PUBLIC_PROTECTED_DATA_MODE ?? process.env.PROTECTED_DATA_MODE,
   })
+}
+
+export function isReadOnlyRealDataTestMode(): boolean {
+  return process.env.NEXT_PUBLIC_REAL_DATA_TEST_MODE === 'read_only'
 }

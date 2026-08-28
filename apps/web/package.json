@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbo",
+    "dev:real-data:readonly": "node scripts/start-real-data-readonly.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

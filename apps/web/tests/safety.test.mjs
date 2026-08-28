@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   assertSafeSupabaseTarget,
   getSupabaseProjectRef,
+  getWebSupabaseConfig,
 } from '../lib/safety/environment.ts'
 import {
   createProtectedFetch,
@@ -69,11 +70,74 @@ test('a declared staging ref is allowed when it is not protected', () => {
   assert.equal(getSupabaseProjectRef(result.url), 'staging-ref')
 })
 
+test('production Node environment alone does not authorize a remote target', () => {
+  const original = {
+    nodeEnv: process.env.NODE_ENV,
+    appEnv: process.env.NEXT_PUBLIC_APP_ENV,
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    protectedRefs: process.env.NEXT_PUBLIC_PROTECTED_SUPABASE_PROJECT_REFS,
+  }
+
+  try {
+    process.env.NODE_ENV = 'production'
+    delete process.env.NEXT_PUBLIC_APP_ENV
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://production-ref.supabase.co'
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = LOCAL_KEY
+    delete process.env.NEXT_PUBLIC_PROTECTED_SUPABASE_PROJECT_REFS
+
+    assert.throws(() => getWebSupabaseConfig(), /protected_supabase_refs_missing/)
+  } finally {
+    for (const [key, value] of Object.entries({
+      NODE_ENV: original.nodeEnv,
+      NEXT_PUBLIC_APP_ENV: original.appEnv,
+      NEXT_PUBLIC_SUPABASE_URL: original.url,
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: original.anonKey,
+      NEXT_PUBLIC_PROTECTED_SUPABASE_PROJECT_REFS: original.protectedRefs,
+    })) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  }
+})
+
+test('explicit read-only real-data mode allows only a listed protected target', () => {
+  const result = assertSafeSupabaseTarget({
+    url: 'https://protected-ref.supabase.co',
+    anonKey: LOCAL_KEY,
+    appEnvironment: 'development',
+    protectedProjectRefs: 'protected-ref',
+    realDataTestMode: 'read_only',
+    protectedDataMode: 'true',
+  })
+
+  assert.equal(result.isReadOnlyRealDataTest, true)
+})
+
+test('read-only real-data mode cannot disable mutation protection', () => {
+  assert.throws(
+    () => assertSafeSupabaseTarget({
+      url: 'https://protected-ref.supabase.co',
+      anonKey: LOCAL_KEY,
+      appEnvironment: 'development',
+      protectedProjectRefs: 'protected-ref',
+      realDataTestMode: 'read_only',
+      protectedDataMode: 'false',
+    }),
+    /real_data_test_requires_protected_mode/,
+  )
+})
+
 test('protected data mode blocks Supabase mutations and allows reads', () => {
   assert.equal(isBlockedProtectedMutation('https://example.supabase.co/rest/v1/students', 'POST', true), true)
   assert.equal(isBlockedProtectedMutation('https://example.supabase.co/storage/v1/object/receipts/a', 'DELETE', true), true)
   assert.equal(isBlockedProtectedMutation('https://example.supabase.co/rest/v1/students', 'GET', true), false)
   assert.equal(isBlockedProtectedMutation('https://example.supabase.co/auth/v1/token', 'POST', true), false)
+  assert.equal(isBlockedProtectedMutation('https://example.supabase.co/auth/v1/logout', 'POST', true), false)
+  assert.equal(isBlockedProtectedMutation('https://example.supabase.co/auth/v1/user', 'PUT', true), true)
+  assert.equal(isBlockedProtectedMutation('https://example.supabase.co/auth/v1/recover', 'POST', true), true)
+  assert.equal(isBlockedProtectedMutation('https://example.supabase.co/storage/v1/object/sign/docs/a', 'POST', true), false)
+  assert.equal(isBlockedProtectedMutation('https://example.supabase.co/unknown/v1/action', 'POST', true), true)
 })
 
 test('protected fetch rejects before calling the transport', async () => {

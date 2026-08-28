@@ -3,6 +3,7 @@ import StudentTable from '@/components/ogrenciler/student-table'
 import KanbanBoard from '@/components/basvurular/kanban-board'
 import GroupFilterChips from '@/components/ogrenciler/group-filter-chips'
 import UyelerTabNav from './tab-nav'
+import { isReadOnlyRealDataTestMode } from '@/lib/safety/environment'
 
 const KANBAN_COLUMNS = [
   { status: 'new', label: 'Yeni' },
@@ -47,7 +48,7 @@ export default async function OgrencilerPage({
       .order('name')
     groups = groupsData ?? []
 
-    const { data: students } = await supabase
+    const modernStudentsResult = await (supabase as any)
       .from('students')
       .select(
         `id, full_name, birth_date, status, has_received_uniform,
@@ -56,7 +57,35 @@ export default async function OgrencilerPage({
       )
       .order('full_name')
 
-    const studentIds = students?.map((s) => s.id) ?? []
+    let students = modernStudentsResult.data as any[] | null
+    if (modernStudentsResult.error && isReadOnlyRealDataTestMode()) {
+      const legacyStudentsResult = await supabase
+        .from('students')
+        .select(
+          `id, full_name, birth_date, status, has_received_uniform,
+          student_groups(is_active, groups(id, name)),
+          parent_student(is_primary, relation, profiles(id, full_name, phone))`,
+        )
+        .order('full_name')
+
+      students = (legacyStudentsResult.data ?? []).map((student: any) => ({
+        ...student,
+        guardian_students: (student.parent_student ?? []).map((link: any) => ({
+          is_primary: link.is_primary,
+          relation: link.relation,
+          guardians: link.profiles
+            ? {
+                id: link.profiles.id,
+                full_name: link.profiles.full_name,
+                phone_e164: link.profiles.phone,
+                status: 'legacy',
+              }
+            : null,
+        })),
+      }))
+    }
+
+    const studentIds = students?.map((s: any) => s.id) ?? []
     const debtMap: Record<string, number> = {}
     if (studentIds.length > 0) {
       const { data: invoices } = await supabase

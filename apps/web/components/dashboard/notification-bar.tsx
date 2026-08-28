@@ -6,6 +6,7 @@ import CancelledSessionsDialog, {
   type CancelledSessionRow,
 } from './cancelled-sessions-dialog'
 import AbsencesDialog, { type AbsenceRow } from './absences-dialog'
+import { isReadOnlyRealDataTestMode } from '@/lib/safety/environment'
 
 export default async function NotificationBar() {
   const supabase = await createClient()
@@ -43,7 +44,15 @@ export default async function NotificationBar() {
   ])
 
   const collectionDay = (schoolResult.data as any)?.collection_day ?? 1
-  const pendingDekont = pendingDekontResult.count ?? 0
+  let pendingDekont = pendingDekontResult.count ?? 0
+  if (pendingDekontResult.error && isReadOnlyRealDataTestMode()) {
+    const legacyPendingResult = await supabase
+      .from('payments')
+      .select('id', { count: 'exact', head: true })
+      .eq('amount', 0)
+      .not('receipt_url', 'is', null)
+    pendingDekont = legacyPendingResult.count ?? 0
+  }
   const activeIds = (activeStudentsResult.data ?? []).map((s: any) => s.id)
 
   let paidCount = 0

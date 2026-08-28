@@ -13,6 +13,7 @@ import AddStaffModal from '@/components/personel/add-staff-modal'
 import StaffTable from '@/components/personel/staff-table'
 import StaffFilters from '@/components/personel/staff-filters'
 import FinansTabNav from './tab-nav'
+import { isReadOnlyRealDataTestMode } from '@/lib/safety/environment'
 
 type Tab = 'aidat' | 'dekontlar' | 'giderler' | 'raporlar'
 
@@ -29,14 +30,25 @@ export default async function FinansPage({
   searchParams: Promise<{ tab?: string; year?: string; search?: string; type?: string; active?: string }>
 }) {
   const supabase = await createClient()
+  const isReadOnlyRealDataTest = isReadOnlyRealDataTestMode()
   const { tab: tabParam = 'aidat', year: yearParam, search, type, active } = await searchParams
   const tab = (['aidat', 'dekontlar', 'giderler', 'raporlar'].includes(tabParam) ? tabParam : 'aidat') as Tab
 
   // Bekleyen dekont sayısı — her tab'da göster
-  const { count: pendingCount } = await (supabase as any)
+  const pendingReceiptResult = await (supabase as any)
     .from('receipt_submissions')
     .select('id', { count: 'exact', head: true })
     .eq('status', 'pending_review')
+
+  let pendingCount = pendingReceiptResult.count as number | null
+  if (pendingReceiptResult.error && isReadOnlyRealDataTest) {
+    const legacyPendingResult = await supabase
+      .from('payments')
+      .select('id', { count: 'exact', head: true })
+      .eq('amount', 0)
+      .not('receipt_url', 'is', null)
+    pendingCount = legacyPendingResult.count
+  }
 
   // ── Aidat ──────────────────────────────────────────────────────────────────
   let aidatContent = null
@@ -72,11 +84,41 @@ export default async function FinansPage({
   // ── Dekontlar ──────────────────────────────────────────────────────────────
   let dekontlarContent = null
   if (tab === 'dekontlar') {
-    const { data: submissions } = await (supabase as any)
+    const modernSubmissionsResult = await (supabase as any)
       .from('receipt_submissions')
       .select('id, invoice_type, invoice_id, student_id, storage_bucket, storage_path, created_at, students(full_name), guardians(full_name, phone_e164)')
       .eq('status', 'pending_review')
       .order('created_at', { ascending: false })
+
+    let submissions = modernSubmissionsResult.data as any[] | null
+    let usingLegacyReceipts = false
+    if (modernSubmissionsResult.error && isReadOnlyRealDataTest) {
+      usingLegacyReceipts = true
+      const legacySubmissionsResult = await supabase
+        .from('payments')
+        .select('id, invoice_type, invoice_id, student_id, receipt_url, created_at, students(full_name, parent_student(is_primary, profiles(full_name, phone)))')
+        .eq('amount', 0)
+        .not('receipt_url', 'is', null)
+        .order('created_at', { ascending: false })
+
+      submissions = (legacySubmissionsResult.data ?? []).map((payment: any) => {
+        const parentLink = payment.students?.parent_student?.find((link: any) => link.is_primary)
+          ?? payment.students?.parent_student?.[0]
+        return {
+          id: payment.id,
+          invoice_type: payment.invoice_type,
+          invoice_id: payment.invoice_id,
+          student_id: payment.student_id,
+          storage_bucket: 'receipts',
+          storage_path: payment.receipt_url,
+          created_at: payment.created_at,
+          students: { full_name: payment.students?.full_name },
+          guardians: parentLink?.profiles
+            ? { full_name: parentLink.profiles.full_name, phone_e164: parentLink.profiles.phone }
+            : null,
+        }
+      })
+    }
 
     if (!submissions || submissions.length === 0) {
       dekontlarContent = (
@@ -99,12 +141,12 @@ export default async function FinansPage({
 
       const aidatMap = Object.fromEntries((aidatRes.data ?? []).map((i: any) => [i.id, i]))
       const equipMap = Object.fromEntries((equipRes.data ?? []).map((i: any) => [i.id, i]))
-      const admin = createAdminClient()
+      const storageClient = usingLegacyReceipts ? supabase : createAdminClient()
 
       const dekontlar = await Promise.all(
         submissions.map(async (p: any) => {
           const urlResult = p.storage_path
-            ? await admin.storage
+            ? await storageClient.storage
                 .from(p.storage_bucket || 'whatsapp-receipts')
                 .createSignedUrl(p.storage_path, 300)
             : { data: null }
@@ -217,15 +259,24 @@ export default async function FinansPage({
   let raporlarContent = null
   if (tab === 'raporlar') {
     const twelveMonthsAgo = nMonthsAgo(11)
-    const [r1, r2, r3] = await Promise.all([
+    const [paymentReportResult, r2, r3] = await Promise.all([
       (supabase as any).from('payments').select('amount, payment_date').eq('status', 'active').gte('payment_date', twelveMonthsAgo),
       supabase.from('expenses').select('amount, expense_date').gte('expense_date', twelveMonthsAgo),
       supabase.from('aidat_invoices').select('student_id, amount, paid_amount, status').in('status', ['pending', 'partial']),
     ])
 
+    let paymentRows = paymentReportResult.data as any[] | null
+    if (paymentReportResult.error && isReadOnlyRealDataTest) {
+      const legacyPaymentReportResult = await supabase
+        .from('payments')
+        .select('amount, payment_date')
+        .gte('payment_date', twelveMonthsAgo)
+      paymentRows = legacyPaymentReportResult.data
+    }
+
     const revenueByMonth: Record<string, number> = {}
     const expenseByMonth: Record<string, number> = {}
-    ;(r1.data ?? []).forEach((p: any) => {
+    ;(paymentRows ?? []).forEach((p: any) => {
       const d = new Date(p.payment_date)
       const key = `${d.getFullYear()}-${d.getMonth()}`
       revenueByMonth[key] = (revenueByMonth[key] ?? 0) + (p.amount ?? 0)
