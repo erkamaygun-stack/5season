@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { chipStyle, DEVAMSIZ_COLOR } from '@/lib/notification-colors'
-import { notifyAbsenceParent, dismissAbsence } from '../../app/(admin)/actions'
+import { dismissAbsence } from '../../app/(admin)/actions'
 
 export type AbsenceRow = {
   id: string
@@ -25,18 +25,6 @@ export default function AbsencesDialog({ absences }: { absences: AbsenceRow[] })
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const chip = chipStyle(absences.length > 0, DEVAMSIZ_COLOR)
-
-  function handleNotify(id: string) {
-    startTransition(async () => {
-      try {
-        await notifyAbsenceParent(id)
-        toast.success('Veliye bildirim kuyruğa alındı')
-        router.refresh()
-      } catch (err: any) {
-        toast.error(err.message ?? 'İşlem başarısız')
-      }
-    })
-  }
 
   function handleDismiss(id: string) {
     startTransition(async () => {
@@ -80,14 +68,6 @@ export default function AbsencesDialog({ absences }: { absences: AbsenceRow[] })
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={isPending}
-                  onClick={() => handleNotify(a.id)}
-                >
-                  Veliye mesaj gönder
-                </Button>
                 <Button
                   size="sm"
                   variant="ghost"

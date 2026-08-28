@@ -2,7 +2,7 @@
   "expo": {
     "name": "5mevsim",
     "slug": "5mevsim",
-    "scheme": "5mevsim",
+    "scheme": "besmevsim",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -27,7 +27,7 @@
         {
           "action": "VIEW",
           "autoVerify": true,
-          "data": [{ "scheme": "5mevsim" }],
+          "data": [{ "scheme": "besmevsim" }],
           "category": ["BROWSABLE", "DEFAULT"]
         }
       ]

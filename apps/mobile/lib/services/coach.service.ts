@@ -179,7 +179,10 @@ export async function getSessionStudents(sessionId: string): Promise<{
     return { sessionInfo: { groupName: 'Yoklama', sessionDate: '', startTime: '' }, students: [] };
   }
 
-  const groupName = (session.groups as { name: string } | null)?.name ?? 'Yoklama';
+  const groupRelation = session.groups as unknown as { name: string } | { name: string }[] | null;
+  const groupName = Array.isArray(groupRelation)
+    ? (groupRelation[0]?.name ?? 'Yoklama')
+    : (groupRelation?.name ?? 'Yoklama');
   const sessionDate: string = (session as any).session_date ?? '';
   const startTime: string = ((session as any).start_time ?? '').slice(0, 5);
 

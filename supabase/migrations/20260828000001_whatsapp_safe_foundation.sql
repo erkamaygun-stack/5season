@@ -28,6 +28,13 @@ create unique index if not exists staff_school_coach_invitation_email_uidx
 -- Coach accounts no longer require a phone number. Existing values are preserved.
 alter table public.profiles alter column phone drop not null;
 
+alter table public.payments
+  add column if not exists status text not null default 'active'
+    check (status in ('active', 'voided')),
+  add column if not exists voided_at timestamptz,
+  add column if not exists voided_by uuid references public.profiles(id),
+  add column if not exists void_reason text;
+
 -- -----------------------------------------------------------------------------
 -- Guardians are contacts, not Auth users.
 -- -----------------------------------------------------------------------------
@@ -60,6 +67,10 @@ create table if not exists public.guardian_students (
 
 create index if not exists guardian_students_student_idx
   on public.guardian_students (student_id);
+
+create unique index if not exists guardian_students_one_primary_uidx
+  on public.guardian_students (student_id)
+  where is_primary = true;
 
 create table if not exists public.guardian_consents (
   id uuid primary key default gen_random_uuid(),
@@ -234,6 +245,14 @@ drop function if exists public.check_mobile_phone(text);
 
 drop policy if exists "payments_parent_insert" on public.payments;
 drop policy if exists "payments_parent_read" on public.payments;
+drop policy if exists "payments_admin_all" on public.payments;
+drop policy if exists "payments_super_admin_all" on public.payments;
+create policy "payments_admin_read" on public.payments
+  for select to authenticated
+  using (
+    public.app_current_role() = 'super_admin'
+    or (public.app_current_role() = 'school_admin' and school_id = public.current_school_id())
+  );
 drop policy if exists "students_parent_read" on public.students;
 drop policy if exists "ps_parent_read_own" on public.parent_student;
 drop policy if exists "groups_parent_read" on public.groups;
@@ -266,6 +285,38 @@ create policy "profiles_select_same_school" on public.profiles
     school_id = public.current_school_id()
     and public.app_current_role() in ('school_admin', 'coach')
   );
+
+drop policy if exists "profiles_admin_write" on public.profiles;
+create policy "profiles_admin_update" on public.profiles
+  for update to authenticated
+  using (public.app_current_role() = 'school_admin' and school_id = public.current_school_id())
+  with check (public.app_current_role() = 'school_admin' and school_id = public.current_school_id());
+
+-- School admins may create/update operational records, but physical deletion of
+-- people is denied at the RLS boundary. The UI archives them instead.
+drop policy if exists "students_admin_all" on public.students;
+create policy "students_admin_read" on public.students
+  for select to authenticated
+  using (public.app_current_role() = 'school_admin' and school_id = public.current_school_id());
+create policy "students_admin_insert" on public.students
+  for insert to authenticated
+  with check (public.app_current_role() = 'school_admin' and school_id = public.current_school_id());
+create policy "students_admin_update" on public.students
+  for update to authenticated
+  using (public.app_current_role() = 'school_admin' and school_id = public.current_school_id())
+  with check (public.app_current_role() = 'school_admin' and school_id = public.current_school_id());
+
+drop policy if exists "staff_admin_all" on public.staff;
+create policy "staff_admin_read" on public.staff
+  for select to authenticated
+  using (public.app_current_role() = 'school_admin' and school_id = public.current_school_id());
+create policy "staff_admin_insert" on public.staff
+  for insert to authenticated
+  with check (public.app_current_role() = 'school_admin' and school_id = public.current_school_id());
+create policy "staff_admin_update" on public.staff
+  for update to authenticated
+  using (public.app_current_role() = 'school_admin' and school_id = public.current_school_id())
+  with check (public.app_current_role() = 'school_admin' and school_id = public.current_school_id());
 
 drop policy if exists "schools_select_own" on public.schools;
 create policy "schools_select_own" on public.schools
@@ -412,6 +463,401 @@ create policy "integration_outbox_admin_read" on public.integration_outbox
     public.app_current_role() = 'super_admin'
     or (public.app_current_role() = 'school_admin' and school_id = public.current_school_id())
   );
+
+-- -----------------------------------------------------------------------------
+-- Financial writes use tenant-validating RPCs. Direct school-admin mutations are
+-- removed above; the invoice total trigger covers insert/update/void atomically.
+-- -----------------------------------------------------------------------------
+
+create or replace function public.update_invoice_on_payment()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_invoice_type text;
+  v_invoice_id uuid;
+  v_total_paid numeric(10,2);
+  v_invoice_amount numeric(10,2);
+begin
+  if tg_op = 'DELETE' then
+    v_invoice_type := old.invoice_type;
+    v_invoice_id := old.invoice_id;
+  else
+    v_invoice_type := new.invoice_type;
+    v_invoice_id := new.invoice_id;
+  end if;
+
+  select coalesce(sum(p.amount), 0)
+  into v_total_paid
+  from public.payments p
+  where p.invoice_type = v_invoice_type
+    and p.invoice_id = v_invoice_id
+    and p.status = 'active';
+
+  if v_invoice_type = 'aidat' then
+    select amount into v_invoice_amount
+    from public.aidat_invoices
+    where id = v_invoice_id;
+
+    update public.aidat_invoices
+    set paid_amount = v_total_paid,
+        status = case
+          when v_total_paid >= v_invoice_amount then 'paid'
+          when v_total_paid > 0 then 'partial'
+          else 'pending'
+        end
+    where id = v_invoice_id;
+  elsif v_invoice_type = 'equipment' then
+    select amount into v_invoice_amount
+    from public.equipment_invoices
+    where id = v_invoice_id;
+
+    update public.equipment_invoices
+    set paid_amount = v_total_paid,
+        status = case
+          when v_total_paid >= v_invoice_amount then 'paid'
+          when v_total_paid > 0 then 'partial'
+          else 'pending'
+        end
+    where id = v_invoice_id;
+  end if;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists payment_updates_invoice on public.payments;
+create trigger payment_updates_invoice
+  after insert or update or delete on public.payments
+  for each row execute function public.update_invoice_on_payment();
+
+create or replace function public.record_manual_payment(
+  p_student_id uuid,
+  p_invoice_type text,
+  p_invoice_id uuid,
+  p_amount numeric,
+  p_payment_method text,
+  p_notes text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor public.profiles%rowtype;
+  v_invoice_valid boolean := false;
+  v_payment_id uuid;
+begin
+  select * into v_actor from public.profiles
+  where id = auth.uid() and is_active = true;
+  if v_actor.id is null or v_actor.role <> 'school_admin' or v_actor.school_id is null then
+    raise exception 'payment_write_forbidden' using errcode = '42501';
+  end if;
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'invalid_payment_amount' using errcode = '22023';
+  end if;
+  if p_payment_method not in ('cash', 'transfer', 'card', 'other') then
+    raise exception 'invalid_payment_method' using errcode = '22023';
+  end if;
+
+  if p_invoice_type = 'aidat' then
+    select exists (
+      select 1 from public.aidat_invoices i
+      where i.id = p_invoice_id
+        and i.student_id = p_student_id
+        and i.school_id = v_actor.school_id
+    ) into v_invoice_valid;
+  elsif p_invoice_type = 'equipment' then
+    select exists (
+      select 1 from public.equipment_invoices i
+      where i.id = p_invoice_id
+        and i.student_id = p_student_id
+        and i.school_id = v_actor.school_id
+    ) into v_invoice_valid;
+  end if;
+
+  if not v_invoice_valid then
+    raise exception 'cross_tenant_or_invalid_invoice' using errcode = '23503';
+  end if;
+
+  insert into public.payments (
+    school_id,
+    student_id,
+    invoice_type,
+    invoice_id,
+    amount,
+    payment_method,
+    payment_date,
+    received_by,
+    notes,
+    status
+  ) values (
+    v_actor.school_id,
+    p_student_id,
+    p_invoice_type,
+    p_invoice_id,
+    p_amount,
+    p_payment_method,
+    current_date,
+    v_actor.id,
+    nullif(trim(p_notes), ''),
+    'active'
+  ) returning id into v_payment_id;
+
+  return v_payment_id;
+end;
+$$;
+
+create or replace function public.update_manual_payment(
+  p_payment_id uuid,
+  p_amount numeric,
+  p_payment_method text,
+  p_notes text
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor public.profiles%rowtype;
+begin
+  select * into v_actor from public.profiles
+  where id = auth.uid() and is_active = true;
+  if v_actor.id is null or v_actor.role <> 'school_admin' or v_actor.school_id is null then
+    raise exception 'payment_write_forbidden' using errcode = '42501';
+  end if;
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'invalid_payment_amount' using errcode = '22023';
+  end if;
+  if p_payment_method not in ('cash', 'transfer', 'card', 'other') then
+    raise exception 'invalid_payment_method' using errcode = '22023';
+  end if;
+
+  update public.payments
+  set amount = p_amount,
+      payment_method = p_payment_method,
+      notes = nullif(trim(p_notes), '')
+  where id = p_payment_id
+    and school_id = v_actor.school_id
+    and status = 'active';
+
+  if not found then
+    raise exception 'active_payment_not_found' using errcode = 'P0002';
+  end if;
+end;
+$$;
+
+create or replace function public.void_manual_payment(
+  p_payment_id uuid,
+  p_reason text
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor public.profiles%rowtype;
+begin
+  select * into v_actor from public.profiles
+  where id = auth.uid() and is_active = true;
+  if v_actor.id is null or v_actor.role <> 'school_admin' or v_actor.school_id is null then
+    raise exception 'payment_write_forbidden' using errcode = '42501';
+  end if;
+
+  update public.payments
+  set status = 'voided',
+      voided_at = now(),
+      voided_by = v_actor.id,
+      void_reason = coalesce(nullif(trim(p_reason), ''), 'admin_voided')
+  where id = p_payment_id
+    and school_id = v_actor.school_id
+    and status = 'active';
+
+  if not found then
+    raise exception 'active_payment_not_found' using errcode = 'P0002';
+  end if;
+end;
+$$;
+
+revoke all on function public.record_manual_payment(uuid, text, uuid, numeric, text, text) from public, anon;
+revoke all on function public.update_manual_payment(uuid, numeric, text, text) from public, anon;
+revoke all on function public.void_manual_payment(uuid, text) from public, anon;
+grant execute on function public.record_manual_payment(uuid, text, uuid, numeric, text, text) to authenticated;
+grant execute on function public.update_manual_payment(uuid, numeric, text, text) to authenticated;
+grant execute on function public.void_manual_payment(uuid, text) to authenticated;
+
+-- -----------------------------------------------------------------------------
+-- Atomic student + guardian creation. Guardians never receive Auth accounts.
+-- -----------------------------------------------------------------------------
+
+create or replace function public.create_student_with_guardian(
+  p_full_name text,
+  p_birth_date date,
+  p_gender text,
+  p_blood_type text,
+  p_enrollment_date date,
+  p_group_id uuid,
+  p_notes text,
+  p_guardian_name text,
+  p_guardian_phone_e164 text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor public.profiles%rowtype;
+  v_student_id uuid;
+  v_guardian_id uuid;
+begin
+  select * into v_actor
+  from public.profiles
+  where id = auth.uid() and is_active = true;
+
+  if v_actor.id is null or v_actor.role <> 'school_admin' or v_actor.school_id is null then
+    raise exception 'student_create_forbidden' using errcode = '42501';
+  end if;
+  if nullif(trim(p_full_name), '') is null or p_enrollment_date is null then
+    raise exception 'student_required_fields_missing' using errcode = '23502';
+  end if;
+  if p_group_id is not null and not exists (
+    select 1 from public.groups g
+    where g.id = p_group_id and g.school_id = v_actor.school_id
+  ) then
+    raise exception 'cross_tenant_group' using errcode = '42501';
+  end if;
+  if (p_guardian_name is null) <> (p_guardian_phone_e164 is null) then
+    raise exception 'guardian_name_and_phone_required_together' using errcode = '22023';
+  end if;
+
+  insert into public.students (
+    school_id,
+    full_name,
+    birth_date,
+    gender,
+    blood_type,
+    enrollment_date,
+    notes,
+    status
+  ) values (
+    v_actor.school_id,
+    trim(p_full_name),
+    p_birth_date,
+    p_gender,
+    p_blood_type,
+    p_enrollment_date,
+    nullif(trim(p_notes), ''),
+    'active'
+  ) returning id into v_student_id;
+
+  if p_group_id is not null then
+    insert into public.student_groups (student_id, group_id, joined_at, is_active)
+    values (v_student_id, p_group_id, p_enrollment_date, true);
+  end if;
+
+  if p_guardian_name is not null then
+    if p_guardian_phone_e164 !~ '^\+[1-9][0-9]{7,14}$' then
+      raise exception 'invalid_guardian_phone' using errcode = '22023';
+    end if;
+
+    insert into public.guardians (school_id, full_name, phone_e164, status)
+    values (v_actor.school_id, trim(p_guardian_name), p_guardian_phone_e164, 'unverified')
+    on conflict (school_id, phone_e164) do update
+      set full_name = excluded.full_name,
+          updated_at = now()
+    returning id into v_guardian_id;
+
+    insert into public.guardian_students (guardian_id, student_id, relation, is_primary)
+    values (v_guardian_id, v_student_id, 'parent', true)
+    on conflict (guardian_id, student_id) do nothing;
+  end if;
+
+  return v_student_id;
+end;
+$$;
+
+revoke all on function public.create_student_with_guardian(text, date, text, text, date, uuid, text, text, text)
+  from public, anon;
+grant execute on function public.create_student_with_guardian(text, date, text, text, date, uuid, text, text, text)
+  to authenticated;
+
+create or replace function public.link_guardian_to_student(
+  p_student_id uuid,
+  p_full_name text,
+  p_phone_e164 text,
+  p_relation text default 'parent',
+  p_is_primary boolean default false
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor public.profiles%rowtype;
+  v_guardian_id uuid;
+begin
+  select * into v_actor
+  from public.profiles
+  where id = auth.uid() and is_active = true;
+
+  if v_actor.id is null or v_actor.role <> 'school_admin' or v_actor.school_id is null then
+    raise exception 'guardian_link_forbidden' using errcode = '42501';
+  end if;
+  if not exists (
+    select 1 from public.students s
+    where s.id = p_student_id and s.school_id = v_actor.school_id
+  ) then
+    raise exception 'cross_tenant_or_invalid_student' using errcode = '42501';
+  end if;
+  if nullif(trim(p_full_name), '') is null then
+    raise exception 'guardian_name_required' using errcode = '23502';
+  end if;
+  if p_phone_e164 is null or p_phone_e164 !~ '^\+[1-9][0-9]{7,14}$' then
+    raise exception 'invalid_guardian_phone' using errcode = '22023';
+  end if;
+
+  insert into public.guardians (school_id, full_name, phone_e164, status)
+  values (v_actor.school_id, trim(p_full_name), p_phone_e164, 'unverified')
+  on conflict (school_id, phone_e164) do update
+    set full_name = excluded.full_name,
+        updated_at = now()
+  returning id into v_guardian_id;
+
+  if p_is_primary then
+    update public.guardian_students
+    set is_primary = false
+    where student_id = p_student_id and is_primary = true;
+  end if;
+
+  insert into public.guardian_students (guardian_id, student_id, relation, is_primary)
+  values (
+    v_guardian_id,
+    p_student_id,
+    coalesce(nullif(trim(p_relation), ''), 'parent'),
+    coalesce(p_is_primary, false)
+  )
+  on conflict (guardian_id, student_id) do update
+    set relation = excluded.relation,
+        is_primary = excluded.is_primary;
+
+  return v_guardian_id;
+end;
+$$;
+
+revoke all on function public.link_guardian_to_student(uuid, text, text, text, boolean)
+  from public, anon;
+grant execute on function public.link_guardian_to_student(uuid, text, text, text, boolean)
+  to authenticated;
 
 -- -----------------------------------------------------------------------------
 -- Atomic admin decision. File deletion and outbound notification remain outbox
@@ -582,6 +1028,104 @@ revoke all on function public.review_receipt_submission(uuid, text, numeric, tex
   from public, anon;
 grant execute on function public.review_receipt_submission(uuid, text, numeric, text, text)
   to authenticated;
+
+-- -----------------------------------------------------------------------------
+-- SECURITY DEFINER hardening. Only the tenant-scoped range generator remains a
+-- client RPC; cron and trigger functions are not directly executable by users.
+-- -----------------------------------------------------------------------------
+
+create or replace function public.generate_sessions_for_range(
+  p_start_date date,
+  p_end_date date
+)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_school_id uuid;
+  v_total_count integer := 0;
+  v_batch_count integer;
+  v_current_day date;
+  v_current_dow integer;
+begin
+  if public.app_current_role() <> 'school_admin' then
+    raise exception 'session_generation_forbidden' using errcode = '42501';
+  end if;
+
+  v_school_id := public.current_school_id();
+  if v_school_id is null then
+    raise exception 'school_not_found' using errcode = '42501';
+  end if;
+  if p_end_date < p_start_date or p_end_date - p_start_date > 365 then
+    raise exception 'invalid_session_generation_range' using errcode = '22023';
+  end if;
+
+  v_current_day := p_start_date;
+  while v_current_day <= p_end_date loop
+    v_current_dow := extract(dow from v_current_day)::integer;
+
+    insert into public.attendance_sessions (
+      school_id,
+      group_id,
+      session_date,
+      start_time,
+      end_time
+    )
+    select
+      g.school_id,
+      g.id,
+      v_current_day,
+      gss.start_time,
+      gss.end_time
+    from public.groups g
+    join public.group_schedule_slots gss on gss.group_id = g.id
+    where g.school_id = v_school_id
+      and g.is_active = true
+      and gss.day_of_week = v_current_dow
+    on conflict (group_id, session_date, start_time) do nothing;
+
+    get diagnostics v_batch_count = row_count;
+    v_total_count := v_total_count + v_batch_count;
+    v_current_day := v_current_day + 1;
+  end loop;
+
+  return v_total_count;
+end;
+$$;
+
+revoke all on function public.generate_sessions_for_range(date, date) from public, anon;
+grant execute on function public.generate_sessions_for_range(date, date) to authenticated;
+
+revoke all on function public.generate_daily_sessions(date) from public, anon, authenticated;
+revoke all on function public.generate_monthly_aidat(integer, integer) from public, anon, authenticated;
+revoke all on function public.generate_tomorrow_sessions() from public, anon, authenticated;
+revoke all on function public.create_first_month_aidat() from public, anon, authenticated;
+revoke all on function public.update_invoice_on_payment() from public, anon, authenticated;
+revoke all on function public.salary_payment_to_expense() from public, anon, authenticated;
+revoke all on function public.write_audit_log() from public, anon, authenticated;
+revoke all on function public.sync_profile_role_to_jwt() from public, anon, authenticated;
+
+revoke all on function public.current_school_id() from public, anon;
+revoke all on function public.app_current_role() from public, anon;
+revoke all on function public.is_coach_for_group(uuid) from public, anon;
+revoke all on function public.is_sg_in_school(uuid) from public, anon;
+revoke all on function public.get_student_school(uuid) from public, anon;
+grant execute on function public.current_school_id() to authenticated;
+grant execute on function public.app_current_role() to authenticated;
+grant execute on function public.is_coach_for_group(uuid) to authenticated;
+grant execute on function public.is_sg_in_school(uuid) to authenticated;
+grant execute on function public.get_student_school(uuid) to authenticated;
+
+alter function public.generate_daily_sessions(date) set search_path = pg_catalog, public;
+alter function public.generate_monthly_aidat(integer, integer) set search_path = pg_catalog, public;
+alter function public.generate_tomorrow_sessions() set search_path = pg_catalog, public;
+alter function public.create_first_month_aidat() set search_path = pg_catalog, public;
+alter function public.update_invoice_on_payment() set search_path = pg_catalog, public;
+alter function public.salary_payment_to_expense() set search_path = pg_catalog, public;
+alter function public.write_audit_log() set search_path = pg_catalog, public;
+alter function public.sync_profile_role_to_jwt() set search_path = pg_catalog, public;
 
 -- updated_at trigger function already exists in the baseline migrations.
 drop trigger if exists guardians_set_updated_at on public.guardians;

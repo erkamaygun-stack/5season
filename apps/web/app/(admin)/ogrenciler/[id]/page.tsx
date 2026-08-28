@@ -11,7 +11,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
     .select(`
       *,
       student_groups(id, joined_at, left_at, is_active, groups(id, name)),
-      parent_student(parent_profile_id, relation, is_primary, profiles(id, full_name, phone, email))
+      guardian_students(guardian_id, relation, is_primary, guardians(id, full_name, phone_e164, status))
     `)
     .eq('id', id)
     .single()
@@ -42,10 +42,11 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
       .select('*')
       .eq('student_id', id)
       .order('created_at', { ascending: false }),
-    supabase
+    (supabase as any)
       .from('payments')
       .select('*')
       .eq('student_id', id)
+      .eq('status', 'active')
       .order('payment_date', { ascending: false }),
     supabase.from('groups').select('id, name').order('name'),
   ])

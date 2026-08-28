@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
+import { createPayment } from '@/app/(admin)/ogrenciler/actions'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,24 +34,17 @@ export default function PaymentModal({ invoice, onClose, onSuccess }: Props) {
     if (!parsedAmount || parsedAmount <= 0) return
     setLoading(true)
 
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: schoolData } = await supabase.from('schools').select('id').limit(1).single()
-
-    const { error } = await supabase.from('payments').insert({
-      school_id: schoolData?.id ?? '',
-      student_id: invoice.student_id,
-      invoice_type: 'aidat',
-      invoice_id: invoice.id,
-      amount: parsedAmount,
-      payment_method: method,
-      payment_date: new Date().toISOString().split('T')[0],
-      received_by: user?.id ?? null,
-      notes: notes || null,
-    })
-
-    if (error) {
-      toast.error('Ödeme kaydedilemedi: ' + error.message)
+    try {
+      await createPayment({
+        student_id: invoice.student_id,
+        invoice_type: 'aidat',
+        invoice_id: invoice.id,
+        amount: parsedAmount,
+        payment_method: method,
+        notes: notes || undefined,
+      })
+    } catch (error) {
+      toast.error('Ödeme kaydedilemedi: ' + (error instanceof Error ? error.message : 'Bilinmeyen hata'))
       setLoading(false)
       return
     }

@@ -13,14 +13,18 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatDate, formatCurrency, getMonthName } from '@/lib/utils'
-import { Upload, Plus, Trash2, UserPlus, Download, ChevronLeft, ChevronRight, Pencil, Phone, Mail } from 'lucide-react'
+import { Upload, Plus, Trash2, UserPlus, Download, ChevronLeft, ChevronRight, Pencil, Phone } from 'lucide-react'
 import {
   deleteStudent,
   createAidatInvoice,
   updateAidatInvoice,
   deleteAidatInvoice,
+  createPayment,
   updatePayment,
   deletePayment,
+  linkGuardianToStudent,
+  updateGuardianContact,
+  unlinkGuardianFromStudent,
 } from '@/app/(admin)/ogrenciler/actions'
 
 interface Props {
@@ -49,13 +53,13 @@ export default function StudentDetailTabs({
   const [deleting, setDeleting] = useState(false)
 
   async function handleDelete() {
-    if (!confirm(`${student.full_name} kalıcı olarak silinsin mi? Bu işlem geri alınamaz.`)) return
+    if (!confirm(`${student.full_name} arşive alınsın mı? Kayıt ve finans ilişkileri korunacak.`)) return
     setDeleting(true)
     try {
       await deleteStudent(student.id)
       router.push('/ogrenciler')
     } catch (err: any) {
-      toast.error(err.message ?? 'Silinemedi')
+      toast.error(err.message ?? 'Arşivlenemedi')
       setDeleting(false)
     }
   }
@@ -65,8 +69,8 @@ export default function StudentDetailTabs({
   const [addGroupModal, setAddGroupModal] = useState(false)
   const [editModal, setEditModal] = useState(false)
   const [signingDoc, setSigningDoc] = useState<string | null>(null)
-  const [parents, setParents] = useState<any[]>(student.parent_student ?? [])
-  const [editParentTarget, setEditParentTarget] = useState<{ id: string; full_name: string; phone: string; email: string } | null>(null)
+  const [parents, setParents] = useState<any[]>(student.guardian_students ?? [])
+  const [editParentTarget, setEditParentTarget] = useState<{ id: string; full_name: string; phone: string } | null>(null)
   const [studentGroups, setStudentGroups] = useState<any[]>(student.student_groups ?? [])
   const [equipInvoices, setEquipInvoices] = useState<any[]>(equipmentInvoices)
   const [equipPayModal, setEquipPayModal] = useState<any | null>(null)
@@ -137,18 +141,14 @@ export default function StudentDetailTabs({
   }
 
   // ── Parent management ─────────────────────────────────────────────────────
-  async function removeParent(parentProfileId: string, parentName: string) {
+  async function removeParent(guardianId: string, parentName: string) {
     if (!confirm(`${parentName} veli bağlantısı kaldırılsın mı?`)) return
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('parent_student')
-      .delete()
-      .eq('parent_profile_id', parentProfileId)
-      .eq('student_id', student.id)
-    if (error) toast.error('Veli kaldırılamadı')
-    else {
+    try {
+      await unlinkGuardianFromStudent(student.id, guardianId)
       toast.success('Veli kaldırıldı')
-      setParents((prev) => prev.filter((p: any) => p.parent_profile_id !== parentProfileId))
+      setParents((prev) => prev.filter((p: any) => p.guardian_id !== guardianId))
+    } catch (error: any) {
+      toast.error(error.message ?? 'Veli kaldırılamadı')
     }
   }
 
@@ -224,9 +224,9 @@ export default function StudentDetailTabs({
                     <Pencil className="w-3.5 h-3.5 mr-1.5" />
                     Düzenle
                   </Button>
-                  <Button size="sm" variant="destructive" onClick={handleDelete} disabled={deleting}>
+                  <Button size="sm" variant="outline" onClick={handleDelete} disabled={deleting}>
                     <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-                    {deleting ? 'Siliniyor…' : 'Profili Sil'}
+                    {deleting ? 'Arşivleniyor…' : 'Arşive Al'}
                   </Button>
                 </div>
               </div>
@@ -371,26 +371,20 @@ export default function StudentDetailTabs({
               ) : (
                 <div className="divide-y">
                   {parents.map((ps: any) => (
-                    <div key={ps.parent_profile_id} className="px-5 py-4">
+                    <div key={ps.guardian_id} className="px-5 py-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="space-y-1.5 flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-medium text-foreground text-sm">{ps.profiles?.full_name ?? '-'}</p>
+                            <p className="font-medium text-foreground text-sm">{ps.guardians?.full_name ?? '-'}</p>
                             {ps.is_primary && <Badge variant="success" className="text-xs">Birincil</Badge>}
                             {ps.relation && (
                               <Badge variant="secondary" className="text-xs capitalize">{ps.relation}</Badge>
                             )}
                           </div>
-                          {ps.profiles?.phone && (
+                          {ps.guardians?.phone_e164 && (
                             <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                               <Phone className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                              {ps.profiles.phone}
-                            </p>
-                          )}
-                          {ps.profiles?.email && (
-                            <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                              <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                              {ps.profiles.email}
+                              {ps.guardians.phone_e164}
                             </p>
                           )}
                         </div>
@@ -401,10 +395,9 @@ export default function StudentDetailTabs({
                             className="h-7 text-xs"
                             onClick={() =>
                               setEditParentTarget({
-                                id: ps.parent_profile_id,
-                                full_name: ps.profiles?.full_name ?? '',
-                                phone: ps.profiles?.phone ?? '',
-                                email: ps.profiles?.email ?? '',
+                                id: ps.guardian_id,
+                                full_name: ps.guardians?.full_name ?? '',
+                                phone: ps.guardians?.phone_e164 ?? '',
                               })
                             }
                           >
@@ -415,7 +408,7 @@ export default function StudentDetailTabs({
                             variant="ghost"
                             size="sm"
                             className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
-                            onClick={() => removeParent(ps.parent_profile_id, ps.profiles?.full_name ?? 'Veli')}
+                            onClick={() => removeParent(ps.guardian_id, ps.guardians?.full_name ?? 'Veli')}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
@@ -764,14 +757,14 @@ export default function StudentDetailTabs({
                             className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
                             disabled={deletingPaymentId === p.id}
                             onClick={async () => {
-                              if (!confirm('Bu ödeme kaydı silinsin mi?')) return
+                              if (!confirm('Bu ödeme kaydı iptal edilsin mi? Kayıt denetim için korunacak.')) return
                               setDeletingPaymentId(p.id)
                               try {
                                 await deletePayment(p.id)
                                 setLocalPayments((prev) => prev.filter((x) => x.id !== p.id))
-                                toast.success('Ödeme silindi')
+                                toast.success('Ödeme iptal edildi')
                               } catch (err: any) {
-                                toast.error(err.message ?? 'Silinemedi')
+                                toast.error(err.message ?? 'İptal edilemedi')
                               } finally {
                                 setDeletingPaymentId(null)
                               }
@@ -802,7 +795,13 @@ export default function StudentDetailTabs({
         studentId={student.id}
         open={addParentModal}
         onClose={() => setAddParentModal(false)}
-        onSuccess={(p) => { setParents((prev) => [...prev, p]); setAddParentModal(false) }}
+        onSuccess={(p) => {
+          setParents((prev) => [
+            ...prev.map((item) => p.is_primary ? { ...item, is_primary: false } : item),
+            p,
+          ])
+          setAddParentModal(false)
+        }}
       />
       <AddGroupModal
         studentId={student.id}
@@ -839,8 +838,8 @@ export default function StudentDetailTabs({
         onSuccess={(updated) => {
           setParents((prev) =>
             prev.map((ps: any) =>
-              ps.parent_profile_id === updated.id
-                ? { ...ps, profiles: { ...ps.profiles, ...updated } }
+              ps.guardian_id === updated.id
+                ? { ...ps, guardians: { ...ps.guardians, ...updated } }
                 : ps
             )
           )
@@ -892,14 +891,14 @@ function AidatPaymentModal({
   onSuccess: () => void
 }) {
   const [amount, setAmount] = useState('')
-  const [method, setMethod] = useState('nakit')
+  const [method, setMethod] = useState('cash')
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (invoice) {
       setAmount(String(Math.max(0, (invoice.amount ?? 0) - (invoice.paid_amount ?? 0))))
-      setMethod('nakit')
+      setMethod('cash')
       setNotes('')
     }
   }, [invoice?.id])
@@ -909,20 +908,20 @@ function AidatPaymentModal({
     const amt = parseFloat(amount)
     if (!amt || amt <= 0) return
     setLoading(true)
-    const supabase = createClient()
-    const { data: schoolData } = await supabase.from('schools').select('id').limit(1).single()
-    const { error } = await supabase.from('payments').insert({
-      student_id: studentId,
-      school_id: schoolData?.id ?? '',
-      invoice_type: 'aidat',
-      invoice_id: invoice.id,
-      amount: amt,
-      payment_method: method,
-      payment_date: new Date().toISOString().split('T')[0],
-      notes: notes || null,
-    })
-    if (error) toast.error('Ödeme kaydedilemedi: ' + error.message)
-    else { toast.success('Ödeme kaydedildi'); onSuccess() }
+    try {
+      await createPayment({
+        student_id: studentId,
+        invoice_type: 'aidat',
+        invoice_id: invoice.id,
+        amount: amt,
+        payment_method: method,
+        notes: notes || undefined,
+      })
+      toast.success('Ödeme kaydedildi')
+      onSuccess()
+    } catch (error) {
+      toast.error('Ödeme kaydedilemedi: ' + (error instanceof Error ? error.message : 'Bilinmeyen hata'))
+    }
     setLoading(false)
   }
 
@@ -957,9 +956,9 @@ function AidatPaymentModal({
                 <Select value={method} onValueChange={setMethod}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="nakit">Nakit</SelectItem>
-                    <SelectItem value="kart">Kredi / Banka Kartı</SelectItem>
-                    <SelectItem value="havale">Havale / EFT</SelectItem>
+                    <SelectItem value="cash">Nakit</SelectItem>
+                    <SelectItem value="card">Kredi / Banka Kartı</SelectItem>
+                    <SelectItem value="transfer">Havale / EFT</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -995,49 +994,29 @@ function AddParentModal({
   onClose: () => void
   onSuccess: (parent: any) => void
 }) {
+  const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [relation, setRelation] = useState('veli')
   const [isPrimary, setIsPrimary] = useState(false)
-  const [foundProfile, setFoundProfile] = useState<any>(null)
-  const [searching, setSearching] = useState(false)
   const [linking, setLinking] = useState(false)
 
-  async function searchParent() {
-    if (!phone.trim()) return
-    setSearching(true)
-    setFoundProfile(null)
-    const supabase = createClient()
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name, phone')
-      .eq('phone', phone.trim())
-      .limit(1)
-      .maybeSingle()
-    if (!data) toast.error('Bu telefon numarasına kayıtlı profil bulunamadı')
-    setFoundProfile(data)
-    setSearching(false)
-  }
-
-  async function linkParent() {
-    if (!foundProfile) return
+  async function linkParent(event: React.FormEvent) {
+    event.preventDefault()
+    if (!fullName.trim() || !phone.trim()) return
     setLinking(true)
-    const supabase = createClient()
-    const { error } = await supabase.from('parent_student').insert({
-      parent_profile_id: foundProfile.id,
-      student_id: studentId,
-      relation,
-      is_primary: isPrimary,
-    })
-    if (error) toast.error('Veli eklenemedi: ' + error.message)
-    else {
-      toast.success('Veli eklendi')
-      onSuccess({
-        parent_profile_id: foundProfile.id,
+    try {
+      const guardian = await linkGuardianToStudent({
+        student_id: studentId,
+        full_name: fullName,
+        phone,
         relation,
         is_primary: isPrimary,
-        profiles: foundProfile,
       })
-      setPhone(''); setFoundProfile(null); setRelation('veli'); setIsPrimary(false)
+      toast.success('Veli eklendi')
+      onSuccess(guardian)
+      setFullName(''); setPhone(''); setRelation('veli'); setIsPrimary(false)
+    } catch (error: any) {
+      toast.error(error.message ?? 'Veli eklenemedi')
     }
     setLinking(false)
   }
@@ -1048,27 +1027,20 @@ function AddParentModal({
         <DialogHeader>
           <DialogTitle>Veli Ekle</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
+        <form onSubmit={linkParent} className="space-y-3">
           <div className="space-y-1.5">
-            <Label>Veli Telefonu</Label>
-            <div className="flex gap-2">
-              <PhoneInput
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="5xx xxx xxxx"
-                onKeyDown={(e) => e.key === 'Enter' && searchParent()}
-              />
-              <Button type="button" variant="outline" onClick={searchParent} disabled={searching}>
-                {searching ? '…' : 'Ara'}
-              </Button>
-            </div>
+            <Label>Ad Soyad *</Label>
+            <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
           </div>
-          {foundProfile && (
-            <div className="rounded-lg border p-3 bg-green-50 border-green-200 text-sm">
-              <p className="font-semibold text-green-800">{foundProfile.full_name}</p>
-              <p className="text-green-600 text-xs">{foundProfile.phone}</p>
-            </div>
-          )}
+          <div className="space-y-1.5">
+            <Label>WhatsApp Telefonu *</Label>
+            <PhoneInput
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="5xx xxx xxxx"
+              required
+            />
+          </div>
           <div className="space-y-1.5">
             <Label>Yakınlık</Label>
             <Select value={relation} onValueChange={setRelation}>
@@ -1091,12 +1063,12 @@ function AddParentModal({
             Birincil veli olarak işaretle
           </label>
           <div className="flex justify-end gap-2 pt-1">
-            <Button variant="outline" onClick={onClose}>İptal</Button>
-            <Button onClick={linkParent} disabled={!foundProfile || linking}>
+            <Button type="button" variant="outline" onClick={onClose}>İptal</Button>
+            <Button type="submit" disabled={!fullName.trim() || !phone.trim() || linking}>
               {linking ? 'Ekleniyor…' : 'Ekle'}
             </Button>
           </div>
-        </div>
+        </form>
       </DialogContent>
     </Dialog>
   )
@@ -1300,7 +1272,8 @@ function EditStudentModal({
                 <SelectContent>
                   <SelectItem value="active">Aktif</SelectItem>
                   <SelectItem value="trial">Deneme</SelectItem>
-                  <SelectItem value="inactive">Pasif</SelectItem>
+                  <SelectItem value="passive">Pasif</SelectItem>
+                  <SelectItem value="left">Arşiv</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1344,13 +1317,13 @@ function EquipPaymentModal({
   onSuccess: (updated: any) => void
 }) {
   const [amount, setAmount] = useState('')
-  const [method, setMethod] = useState('nakit')
+  const [method, setMethod] = useState('cash')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (invoice) {
       setAmount(String(Math.max(0, (invoice.amount ?? 0) - (invoice.paid_amount ?? 0))))
-      setMethod('nakit')
+      setMethod('cash')
     }
   }, [invoice?.id])
 
@@ -1359,18 +1332,19 @@ function EquipPaymentModal({
     const amt = parseFloat(amount)
     if (!amt || amt <= 0) return
     setLoading(true)
-    const supabase = createClient()
-    const { data: schoolData } = await supabase.from('schools').select('id').limit(1).single()
-    const { error } = await supabase.from('payments').insert({
-      student_id: studentId,
-      school_id: schoolData?.id ?? '',
-      invoice_type: 'equipment',
-      invoice_id: invoice.id,
-      amount: amt,
-      payment_method: method,
-      payment_date: new Date().toISOString().split('T')[0],
-    })
-    if (error) { toast.error('Ödeme kaydedilemedi: ' + error.message); setLoading(false); return }
+    try {
+      await createPayment({
+        student_id: studentId,
+        invoice_type: 'equipment',
+        invoice_id: invoice.id,
+        amount: amt,
+        payment_method: method,
+      })
+    } catch (error) {
+      toast.error('Ödeme kaydedilemedi: ' + (error instanceof Error ? error.message : 'Bilinmeyen hata'))
+      setLoading(false)
+      return
+    }
 
     // Local state güncelle — trigger invoice'ı DB'de güncelliyor, router.refresh() gereksiz
     const newPaid = (invoice.paid_amount ?? 0) + amt
@@ -1404,9 +1378,9 @@ function EquipPaymentModal({
                 <Select value={method} onValueChange={setMethod}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="nakit">Nakit</SelectItem>
-                    <SelectItem value="kart">Kredi / Banka Kartı</SelectItem>
-                    <SelectItem value="havale">Havale / EFT</SelectItem>
+                    <SelectItem value="cash">Nakit</SelectItem>
+                    <SelectItem value="card">Kredi / Banka Kartı</SelectItem>
+                    <SelectItem value="transfer">Havale / EFT</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1430,20 +1404,18 @@ function EditParentModal({
   onClose,
   onSuccess,
 }: {
-  target: { id: string; full_name: string; phone: string; email: string } | null
+  target: { id: string; full_name: string; phone: string } | null
   onClose: () => void
-  onSuccess: (updated: { id: string; full_name: string; phone: string; email: string }) => void
+  onSuccess: (updated: { id: string; full_name: string; phone_e164: string }) => void
 }) {
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
-  const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (target) {
       setFullName(target.full_name)
       setPhone(target.phone)
-      setEmail(target.email)
     }
   }, [target?.id])
 
@@ -1451,16 +1423,16 @@ function EditParentModal({
     e.preventDefault()
     if (!target || !fullName.trim() || !phone.trim()) return
     setLoading(true)
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('profiles')
-      .update({ full_name: fullName.trim(), phone: phone.trim(), email: email.trim() || null } as any)
-      .eq('id', target.id)
-    if (error) {
-      toast.error('Kaydedilemedi: ' + error.message)
-    } else {
+    try {
+      const updated = await updateGuardianContact({
+        guardian_id: target.id,
+        full_name: fullName,
+        phone,
+      })
       toast.success('Veli bilgileri güncellendi')
-      onSuccess({ id: target.id, full_name: fullName.trim(), phone: phone.trim(), email: email.trim() })
+      onSuccess(updated)
+    } catch (error: any) {
+      toast.error(error.message ?? 'Kaydedilemedi')
     }
     setLoading(false)
   }
@@ -1484,15 +1456,6 @@ function EditParentModal({
               onChange={(e) => setPhone(e.target.value)}
               placeholder="5xxxxxxxxx"
               required
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>E-posta</Label>
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="isteğe bağlı"
             />
           </div>
           <div className="flex justify-end gap-2 pt-2">
@@ -1690,14 +1653,14 @@ function EditPaymentModal({
   onSuccess: (updated: any) => void
 }) {
   const [amount, setAmount] = useState('')
-  const [method, setMethod] = useState('nakit')
+  const [method, setMethod] = useState('cash')
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (payment) {
       setAmount(String(payment.amount ?? ''))
-      setMethod(payment.payment_method ?? 'nakit')
+      setMethod(payment.payment_method ?? 'cash')
       setNotes(payment.notes ?? '')
     }
   }, [payment?.id])
@@ -1736,9 +1699,9 @@ function EditPaymentModal({
               <Select value={method} onValueChange={setMethod}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="nakit">Nakit</SelectItem>
-                  <SelectItem value="kart">Kredi / Banka Kartı</SelectItem>
-                  <SelectItem value="havale">Havale / EFT</SelectItem>
+                  <SelectItem value="cash">Nakit</SelectItem>
+                  <SelectItem value="card">Kredi / Banka Kartı</SelectItem>
+                  <SelectItem value="transfer">Havale / EFT</SelectItem>
                 </SelectContent>
               </Select>
             </div>

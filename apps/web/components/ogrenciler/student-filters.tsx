@@ -53,7 +53,8 @@ export default function StudentFilters({ groups }: { groups: Group[] }) {
           <SelectItem value="all">Tüm Durumlar</SelectItem>
           <SelectItem value="active">Aktif</SelectItem>
           <SelectItem value="trial">Deneme</SelectItem>
-          <SelectItem value="inactive">Pasif</SelectItem>
+          <SelectItem value="passive">Pasif</SelectItem>
+          <SelectItem value="left">Arşiv</SelectItem>
         </SelectContent>
       </Select>
       <Select

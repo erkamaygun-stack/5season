@@ -22,11 +22,10 @@ export default async function NotificationBar() {
     sessionsTodayResult,
   ] = await Promise.all([
     supabase.from('schools').select('collection_day').limit(1).single(),
-    supabase
-      .from('payments')
+    (supabase as any)
+      .from('receipt_submissions')
       .select('id', { count: 'exact', head: true })
-      .eq('amount', 0)
-      .not('receipt_url', 'is', null),
+      .eq('status', 'pending_review'),
     supabase.from('students').select('id').eq('status', 'active'),
     supabase
       .from('attendance_sessions')

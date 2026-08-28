@@ -177,20 +177,43 @@ export async function updateStaff(staffId: string, data: {
   revalidatePath(`/personel/${staffId}`)
 }
 
-export async function deleteStaff(staffId: string, profileId?: string) {
+export async function deleteStaff(staffId: string, _profileId?: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Oturum bulunamadı')
 
-  // Önce staff kaydını sil (FK çakışması olmaması için)
-  const { error } = await supabase.from('staff').delete().eq('id', staffId)
+  const { data: actor } = await supabase
+    .from('profiles')
+    .select('school_id, role')
+    .eq('id', user.id)
+    .single()
+  if (!actor?.school_id || !['school_admin', 'super_admin'].includes(actor.role)) {
+    throw new Error('Bu işlem için yetkiniz yok')
+  }
+
+  // İstemcinin gönderdiği profile id'ye güvenme; staff ilişkisini server tarafında bul.
+  const { data: staff, error: fetchError } = await supabase
+    .from('staff')
+    .select('id, profile_id, school_id')
+    .eq('id', staffId)
+    .eq('school_id', actor.school_id)
+    .single()
+  if (fetchError || !staff) throw new Error('Personel bulunamadı')
+
+  const { error } = await supabase
+    .from('staff')
+    .update({ is_active: false } as any)
+    .eq('id', staff.id)
+    .eq('school_id', actor.school_id)
   if (error) throw new Error(error.message)
 
-  // Sonra auth kullanıcısını sil (profiles cascade ile silinir)
-  if (profileId) {
-    const admin = createAdminClient()
-    const { error: authError } = await admin.auth.admin.deleteUser(profileId)
-    if (authError) throw new Error('Kayıt silindi fakat hesap silinemedi: ' + authError.message)
+  if (staff.profile_id) {
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ is_active: false } as any)
+      .eq('id', staff.profile_id)
+      .eq('school_id', actor.school_id)
+    if (profileError) throw new Error('Personel arşivlendi fakat giriş hesabı kapatılamadı')
   }
 
   revalidatePath('/finans')

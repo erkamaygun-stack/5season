@@ -218,7 +218,7 @@ export default async function FinansPage({
   if (tab === 'raporlar') {
     const twelveMonthsAgo = nMonthsAgo(11)
     const [r1, r2, r3] = await Promise.all([
-      supabase.from('payments').select('amount, payment_date').gte('payment_date', twelveMonthsAgo),
+      (supabase as any).from('payments').select('amount, payment_date').eq('status', 'active').gte('payment_date', twelveMonthsAgo),
       supabase.from('expenses').select('amount, expense_date').gte('expense_date', twelveMonthsAgo),
       supabase.from('aidat_invoices').select('student_id, amount, paid_amount, status').in('status', ['pending', 'partial']),
     ])

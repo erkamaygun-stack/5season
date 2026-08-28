@@ -2,7 +2,6 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 
 function toE164(phone: string): string {
   const digits = phone.replace(/\D/g, '')
@@ -34,86 +33,88 @@ export async function addStudent(data: {
 
   if (!profile?.school_id) throw new Error('Okul bilgisi bulunamadı')
 
-  // Öğrenci ekle
-  const { data: student, error } = await supabase
-    .from('students')
-    .insert({
-      school_id: profile.school_id,
-      full_name: data.full_name,
-      birth_date: data.birth_date || null,
-      gender: data.gender || null,
-      blood_type: data.blood_type || null,
-      enrollment_date: data.enrollment_date,
-      notes: data.notes || null,
-      status: 'active',
-    } as any)
-    .select('id')
-    .single()
-
-  if (error || !student) throw new Error(error?.message ?? 'Öğrenci eklenemedi')
-
-  // Grup ataması
-  if (data.group_id) {
-    await supabase.from('student_groups').insert({
-      student_id: student.id,
-      group_id: data.group_id,
-      joined_at: data.enrollment_date,
-      is_active: true,
-    } as any)
+  const guardianName = data.parent_name?.trim() || null
+  const guardianPhone = data.parent_phone?.trim() ? toE164(data.parent_phone) : null
+  if ((guardianName === null) !== (guardianPhone === null)) {
+    throw new Error('Veli adı ve telefonu birlikte girilmeli')
   }
 
-  // Veli oluşturma
-  if (data.parent_phone && data.parent_name) {
-    const e164 = toE164(data.parent_phone)
-    const digits = e164.replace('+90', '')
-    const parentEmail = `${digits}@5mevsim.app`
+  const { error } = await (supabase.rpc as any)('create_student_with_guardian', {
+    p_full_name: data.full_name.trim(),
+    p_birth_date: data.birth_date || null,
+    p_gender: data.gender || null,
+    p_blood_type: data.blood_type || null,
+    p_enrollment_date: data.enrollment_date,
+    p_group_id: data.group_id || null,
+    p_notes: data.notes || null,
+    p_guardian_name: guardianName,
+    p_guardian_phone_e164: guardianPhone,
+  })
+  if (error) throw new Error('Öğrenci eklenemedi: ' + error.message)
 
-    const admin = createAdminClient()
+  revalidatePath('/ogrenciler')
+}
 
-    // Aynı telefona sahip mevcut veli profili var mı?
-    const { data: existingProfile } = await admin
-      .from('profiles')
-      .select('id')
-      .eq('phone', e164)
-      .eq('role', 'parent')
-      .maybeSingle()
+export async function linkGuardianToStudent(data: {
+  student_id: string
+  full_name: string
+  phone: string
+  relation: string
+  is_primary: boolean
+}) {
+  const supabase = await createClient()
+  const phoneE164 = toE164(data.phone)
+  const { data: guardianId, error } = await (supabase.rpc as any)('link_guardian_to_student', {
+    p_student_id: data.student_id,
+    p_full_name: data.full_name.trim(),
+    p_phone_e164: phoneE164,
+    p_relation: data.relation.trim() || 'parent',
+    p_is_primary: data.is_primary,
+  })
+  if (error) throw new Error('Veli bağlanamadı: ' + error.message)
 
-    let parentProfileId: string
-
-    if (existingProfile) {
-      parentProfileId = existingProfile.id
-    } else {
-      const { data: created, error: createErr } = await admin.auth.admin.createUser({
-        email: parentEmail,
-        password: '111111',
-        phone: e164,
-        phone_confirm: true,
-        email_confirm: true,
-        user_metadata: { full_name: data.parent_name },
-      })
-      if (createErr || !created.user) {
-        throw new Error(createErr?.message ?? 'Veli hesabı oluşturulamadı')
-      }
-
-      await admin.from('profiles').upsert({
-        id: created.user.id,
-        full_name: data.parent_name,
-        phone: e164,
-        email: parentEmail,
-        role: 'parent',
-        school_id: profile.school_id,
-      })
-      parentProfileId = created.user.id
-    }
-
-    await supabase.from('parent_student').insert({
-      parent_profile_id: parentProfileId,
-      student_id: student.id,
-      relation: 'parent',
-      is_primary: true,
-    } as any)
+  revalidatePath(`/ogrenciler/${data.student_id}`)
+  revalidatePath('/ogrenciler')
+  return {
+    guardian_id: guardianId as string,
+    relation: data.relation.trim() || 'parent',
+    is_primary: data.is_primary,
+    guardians: {
+      id: guardianId as string,
+      full_name: data.full_name.trim(),
+      phone_e164: phoneE164,
+      status: 'unverified',
+    },
   }
+}
 
+export async function updateGuardianContact(data: {
+  guardian_id: string
+  full_name: string
+  phone: string
+}) {
+  const supabase = await createClient()
+  const phoneE164 = toE164(data.phone)
+  const { error } = await (supabase as any)
+    .from('guardians')
+    .update({ full_name: data.full_name.trim(), phone_e164: phoneE164 })
+    .eq('id', data.guardian_id)
+  if (error) throw new Error('Veli güncellenemedi: ' + error.message)
+
+  revalidatePath('/ogrenciler')
+  return { id: data.guardian_id, full_name: data.full_name.trim(), phone_e164: phoneE164 }
+}
+
+export async function unlinkGuardianFromStudent(studentId: string, guardianId: string) {
+  const supabase = await createClient()
+  const { error } = await (supabase as any)
+    .from('guardian_students')
+    .delete()
+    .eq('guardian_id', guardianId)
+    .eq('student_id', studentId)
+  if (error) throw new Error('Veli bağlantısı kaldırılamadı: ' + error.message)
+
+  revalidatePath(`/ogrenciler/${studentId}`)
   revalidatePath('/ogrenciler')
 }
 
@@ -122,7 +123,11 @@ export async function deleteStudent(studentId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Oturum bulunamadı')
 
-  const { error } = await supabase.from('students').delete().eq('id', studentId)
+  // Gerçek kullanıcı verisini fiziksel olarak silme; ilişki ve finans kayıtları korunur.
+  const { error } = await supabase
+    .from('students')
+    .update({ status: 'left' } as any)
+    .eq('id', studentId)
   if (error) throw new Error(error.message)
 
   revalidatePath('/ogrenciler')
@@ -189,6 +194,36 @@ export async function deleteAidatInvoice(id: string) {
   revalidatePath('/ogrenciler')
 }
 
+export async function createPayment(data: {
+  student_id: string
+  invoice_type: 'aidat' | 'equipment'
+  invoice_id: string
+  amount: number
+  payment_method: string
+  notes?: string
+}) {
+  if (data.amount <= 0) throw new Error('Tutar sıfırdan büyük olmalı')
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Oturum bulunamadı')
+
+  const { data: paymentId, error } = await (supabase.rpc as any)('record_manual_payment', {
+    p_student_id: data.student_id,
+    p_invoice_type: data.invoice_type,
+    p_invoice_id: data.invoice_id,
+    p_amount: data.amount,
+    p_payment_method: data.payment_method,
+    p_notes: data.notes ?? null,
+  })
+  if (error) throw new Error('Ödeme kaydedilemedi: ' + error.message)
+
+  revalidatePath('/ogrenciler')
+  revalidatePath('/aidat')
+  revalidatePath('/finans')
+  return paymentId as string
+}
+
 export async function updatePayment(id: string, data: {
   amount: number
   payment_method?: string
@@ -198,50 +233,17 @@ export async function updatePayment(id: string, data: {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Oturum bulunamadı')
 
-  // Önce mevcut ödemeyi al (hangi invoice'a ait olduğunu bulmak için)
-  const { data: payment, error: fetchErr } = await supabase
-    .from('payments')
-    .select('invoice_id, invoice_type')
-    .eq('id', id)
-    .single()
-  if (fetchErr || !payment) throw new Error('Ödeme bulunamadı')
-
-  const { error } = await supabase
-    .from('payments')
-    .update({
-      amount: data.amount,
-      payment_method: data.payment_method || null,
-      notes: data.notes || null,
-    } as any)
-    .eq('id', id)
-  if (error) throw new Error(error.message)
-
-  // Trigger sadece INSERT'te çalıştığı için paid_amount'u manuel güncelle
-  if (payment.invoice_type === 'aidat') {
-    const { data: allPayments } = await supabase
-      .from('payments')
-      .select('amount')
-      .eq('invoice_id', payment.invoice_id)
-      .eq('invoice_type', 'aidat')
-
-    const totalPaid = (allPayments ?? []).reduce((sum: number, p: any) => sum + (p.amount ?? 0), 0)
-
-    const { data: inv } = await supabase
-      .from('aidat_invoices')
-      .select('amount')
-      .eq('id', payment.invoice_id)
-      .single()
-
-    const invAmount = inv?.amount ?? 0
-    const status = totalPaid <= 0 ? 'pending' : totalPaid >= invAmount ? 'paid' : 'partial'
-
-    await supabase
-      .from('aidat_invoices')
-      .update({ paid_amount: totalPaid, status } as any)
-      .eq('id', payment.invoice_id)
-  }
+  const { error } = await (supabase.rpc as any)('update_manual_payment', {
+    p_payment_id: id,
+    p_amount: data.amount,
+    p_payment_method: data.payment_method || 'other',
+    p_notes: data.notes ?? null,
+  })
+  if (error) throw new Error('Ödeme güncellenemedi: ' + error.message)
 
   revalidatePath('/ogrenciler')
+  revalidatePath('/aidat')
+  revalidatePath('/finans')
 }
 
 export async function deletePayment(id: string) {
@@ -249,40 +251,13 @@ export async function deletePayment(id: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Oturum bulunamadı')
 
-  const { data: payment, error: fetchErr } = await supabase
-    .from('payments')
-    .select('invoice_id, invoice_type, amount')
-    .eq('id', id)
-    .single()
-  if (fetchErr || !payment) throw new Error('Ödeme bulunamadı')
-
-  const { error } = await supabase.from('payments').delete().eq('id', id)
-  if (error) throw new Error(error.message)
-
-  // Trigger sadece INSERT'te çalıştığı için paid_amount'u manuel yeniden hesapla
-  if (payment.invoice_type === 'aidat') {
-    const { data: remaining } = await supabase
-      .from('payments')
-      .select('amount')
-      .eq('invoice_id', payment.invoice_id)
-      .eq('invoice_type', 'aidat')
-
-    const totalPaid = (remaining ?? []).reduce((sum: number, p: any) => sum + (p.amount ?? 0), 0)
-
-    const { data: inv } = await supabase
-      .from('aidat_invoices')
-      .select('amount')
-      .eq('id', payment.invoice_id)
-      .single()
-
-    const invAmount = inv?.amount ?? 0
-    const status = totalPaid <= 0 ? 'pending' : totalPaid >= invAmount ? 'paid' : 'partial'
-
-    await supabase
-      .from('aidat_invoices')
-      .update({ paid_amount: totalPaid, status } as any)
-      .eq('id', payment.invoice_id)
-  }
+  const { error } = await (supabase.rpc as any)('void_manual_payment', {
+    p_payment_id: id,
+    p_reason: 'admin_voided',
+  })
+  if (error) throw new Error('Ödeme iptal edilemedi: ' + error.message)
 
   revalidatePath('/ogrenciler')
+  revalidatePath('/aidat')
+  revalidatePath('/finans')
 }

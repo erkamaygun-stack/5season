@@ -37,17 +37,18 @@ interface StudentRow {
     is_active: boolean
     groups: { id: string; name: string } | null
   }>
-  parent_student: Array<{
+  guardian_students: Array<{
     is_primary: boolean | null
     relation: string | null
-    profiles: { id: string; full_name: string; phone: string } | null
+    guardians: { id: string; full_name: string; phone_e164: string; status: string } | null
   }>
 }
 
 const STATUS: Record<string, { label: string; variant: 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'outline' | 'ghost' | 'link' }> = {
   active: { label: 'Aktif', variant: 'success' },
   trial: { label: 'Deneme', variant: 'warning' },
-  inactive: { label: 'Pasif', variant: 'secondary' },
+  passive: { label: 'Pasif', variant: 'secondary' },
+  left: { label: 'Arşiv', variant: 'secondary' },
 }
 
 function calcAge(birthDate: string | null): string {
@@ -74,13 +75,13 @@ export default function StudentTable({
   const [toggling, setToggling] = useState<string | null>(null)
 
   async function toggle(s: StudentRow) {
-    const goInactive = s.status !== 'inactive'
+    const goInactive = s.status !== 'passive'
     if (!confirm(`${s.full_name} ${goInactive ? 'pasife' : 'aktife'} alınsın mı?`)) return
     setToggling(s.id)
     const supabase = createClient()
     const { error } = await supabase
       .from('students')
-      .update({ status: goInactive ? 'inactive' : 'active' })
+      .update({ status: goInactive ? 'passive' : 'active' })
       .eq('id', s.id)
     if (error) toast.error('İşlem başarısız: ' + error.message)
     else {
@@ -123,8 +124,8 @@ export default function StudentTable({
             <TableBody>
               {students.map((s) => {
                 const activeGroup = s.student_groups?.find((sg) => sg.is_active)
-                const primaryParent =
-                  s.parent_student?.find((ps) => ps.is_primary) ?? s.parent_student?.[0]
+                const primaryGuardian =
+                  s.guardian_students?.find((gs) => gs.is_primary) ?? s.guardian_students?.[0]
                 const { label, variant } =
                   STATUS[s.status] ?? { label: s.status, variant: 'secondary' as const }
 
@@ -147,11 +148,11 @@ export default function StudentTable({
                     </TableCell>
 
                     <TableCell className="text-muted-foreground">
-                      {primaryParent?.profiles?.full_name ?? '—'}
+                      {primaryGuardian?.guardians?.full_name ?? '—'}
                     </TableCell>
 
                     <TableCell className="text-muted-foreground">
-                      {primaryParent?.profiles?.phone ?? '—'}
+                      {primaryGuardian?.guardians?.phone_e164 ?? '—'}
                     </TableCell>
 
                     <TableCell className="text-muted-foreground">
@@ -187,15 +188,15 @@ export default function StudentTable({
                         variant="ghost"
                         size="sm"
                         className={`h-7 w-7 p-0 ${
-                          s.status === 'inactive'
+                          s.status === 'passive'
                             ? 'text-green-600 hover:text-green-700 hover:bg-green-50'
                             : 'text-red-500 hover:text-red-700 hover:bg-red-50'
                         }`}
-                        title={s.status === 'inactive' ? 'Aktife Al' : 'Pasife Al'}
+                        title={s.status === 'passive' ? 'Aktife Al' : 'Pasife Al'}
                         onClick={() => toggle(s)}
                         disabled={toggling === s.id}
                       >
-                        {s.status === 'inactive' ? (
+                        {s.status === 'passive' ? (
                           <UserCheck className="w-3.5 h-3.5" />
                         ) : (
                           <UserX className="w-3.5 h-3.5" />

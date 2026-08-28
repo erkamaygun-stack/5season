@@ -57,14 +57,14 @@ export default function StaffDetailWindow({
 
   async function handleDelete() {
     if (!data) return
-    if (!confirm(`${data.staff.full_name} kalıcı olarak silinsin mi? Bu işlem geri alınamaz.`)) return
+    if (!confirm(`${data.staff.full_name} arşive alınsın ve girişi kapatılsın mı?`)) return
     setDeleting(true)
     try {
       await deleteStaff(data.staff.id, data.staff.profile_id || undefined)
       onClose()
       router.push('/finans?tab=giderler')
     } catch (err: any) {
-      toast.error(err.message ?? 'Silinemedi')
+      toast.error(err.message ?? 'Arşivlenemedi')
       setDeleting(false)
     }
   }
@@ -125,9 +125,9 @@ export default function StaffDetailWindow({
                           <Banknote className="w-3.5 h-3.5 mr-1.5" />
                           Maaş Öde
                         </Button>
-                        <Button size="sm" variant="destructive" onClick={handleDelete} disabled={deleting}>
+                        <Button size="sm" variant="outline" onClick={handleDelete} disabled={deleting}>
                           <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-                          {deleting ? 'Siliniyor…' : 'Profili Sil'}
+                          {deleting ? 'Arşivleniyor…' : 'Arşive Al'}
                         </Button>
                       </div>
                     </div>

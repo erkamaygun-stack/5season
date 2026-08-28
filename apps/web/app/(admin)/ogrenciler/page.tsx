@@ -8,9 +8,10 @@ const KANBAN_COLUMNS = [
   { status: 'new', label: 'Yeni' },
   { status: 'contacted', label: 'İletişimde' },
   { status: 'trial_scheduled', label: 'Deneme Planlandı' },
-  { status: 'trial_done', label: 'Deneme Yapıldı' },
+  { status: 'trialed', label: 'Deneme Yapıldı' },
   { status: 'enrolled', label: 'Kayıt Oldu' },
-  { status: 'dropped', label: 'Vazgeçildi' },
+  { status: 'rejected', label: 'Vazgeçildi' },
+  { status: 'no_show', label: 'Gelmedi' },
 ]
 
 export default async function OgrencilerPage({
@@ -51,7 +52,7 @@ export default async function OgrencilerPage({
       .select(
         `id, full_name, birth_date, status, has_received_uniform,
         student_groups(is_active, groups(id, name)),
-        parent_student(is_primary, relation, profiles(id, full_name, phone))`,
+        guardian_students(is_primary, relation, guardians(id, full_name, phone_e164, status))`,
       )
       .order('full_name')
 
