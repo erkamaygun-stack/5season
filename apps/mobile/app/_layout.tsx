@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '../lib/auth-context';
-import { setupNotificationHandlers, registerForPushNotifications } from '../lib/notifications-handler';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
@@ -23,19 +22,12 @@ const persister = createAsyncStoragePersister({ storage: AsyncStorage });
 function NavigationGuard() {
   const router = useRouter();
   const segments = useSegments();
-  const { role, userId, loading } = useAuth();
+  const { role, loading } = useAuth();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    return setupNotificationHandlers();
   }, []);
-
-  useEffect(() => {
-    if (userId && role === 'parent') {
-      registerForPushNotifications(userId);
-    }
-  }, [userId, role]);
 
   useEffect(() => {
     if (!mounted || loading) return;
@@ -47,13 +39,10 @@ function NavigationGuard() {
       return;
     }
 
-    const onCorrectSection =
-      (role === 'parent' && segments[0] === '(parent)') ||
-      (role === 'coach' && segments[0] === '(coach)');
+    const onCorrectSection = role === 'coach' && segments[0] === '(coach)';
 
     if (!onCorrectSection) {
-      if (role === 'parent') router.replace('/(parent)');
-      else if (role === 'coach') router.replace('/(coach)');
+      router.replace('/(coach)');
     }
   }, [role, segments, mounted, loading]);
 

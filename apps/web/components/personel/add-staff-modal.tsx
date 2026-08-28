@@ -17,6 +17,7 @@ export default function AddStaffModal() {
   const [form, setForm] = useState({
     full_name: '',
     staff_type: 'coach',
+    email: '',
     phone: '',
     monthly_salary: '',
   })
@@ -28,19 +29,24 @@ export default function AddStaffModal() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.full_name.trim()) return
-    if (form.staff_type === 'coach' && !form.phone.trim()) return
+    if (form.staff_type === 'coach' && !form.email.trim()) return
 
     startTransition(async () => {
       try {
         await createStaff({
           full_name: form.full_name,
           staff_type: form.staff_type,
+          email: form.email,
           phone: form.phone,
           monthly_salary: form.monthly_salary ? Number(form.monthly_salary) : undefined,
         })
-        toast.success(`${form.full_name} eklendi`)
+        toast.success(
+          form.staff_type === 'coach'
+            ? `${form.full_name} eklendi; e-posta daveti güvenlik karantinasında.`
+            : `${form.full_name} eklendi`,
+        )
         setOpen(false)
-        setForm({ full_name: '', staff_type: 'coach', phone: '', monthly_salary: '' })
+        setForm({ full_name: '', staff_type: 'coach', email: '', phone: '', monthly_salary: '' })
       } catch (err: any) {
         toast.error('Personel eklenemedi: ' + (err?.message ?? 'Bilinmeyen hata'))
       }
@@ -81,19 +87,29 @@ export default function AddStaffModal() {
               </SelectContent>
             </Select>
           </div>
+          {isCoach && (
+            <div className="space-y-1.5">
+              <Label>E-posta *</Label>
+              <Input
+                type="email"
+                value={form.email}
+                onChange={(e) => set('email', e.target.value)}
+                placeholder="antrenor@ornek.com"
+                autoComplete="off"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Antrenör mobil uygulamaya bu e-posta adresiyle giriş yapacak.
+              </p>
+            </div>
+          )}
           <div className="space-y-1.5">
-            <Label>Telefon {isCoach ? '*' : ''}</Label>
+            <Label>Telefon</Label>
             <PhoneInput
               value={form.phone}
               onChange={(e) => set('phone', e.target.value)}
               placeholder="5xxxxxxxxx"
-              required={isCoach}
             />
-            {isCoach && (
-              <p className="text-xs text-muted-foreground">
-                Antrenör mobil uygulamaya bu numara ile giriş yapacak.
-              </p>
-            )}
           </div>
           <div className="space-y-1.5">
             <Label>Aylık Maaş (₺)</Label>

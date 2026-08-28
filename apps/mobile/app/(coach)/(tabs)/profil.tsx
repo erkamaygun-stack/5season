@@ -3,7 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../../lib/auth-context';
 
 export default function CoachProfilScreen() {
-  const { phone, name, logout, schoolName, groupName } = useAuth();
+  const { email, name, logout, schoolName, groupName } = useAuth();
 
   function handleLogout() {
     Alert.alert('Çıkış Yap', 'Hesabınızdan çıkmak istediğinize emin misiniz?', [
@@ -23,11 +23,11 @@ export default function CoachProfilScreen() {
             <Text className="text-2xl font-bold text-blue-600">{initial}</Text>
           </View>
           <Text className="text-base font-semibold text-gray-900">{name || 'Antrenör'}</Text>
-          <Text className="text-sm text-gray-500">{phone ?? '-'}</Text>
+          <Text className="text-sm text-gray-500">{email ?? '-'}</Text>
         </View>
 
         <View className="border-t border-gray-100 pt-4">
-          <Row label="Telefon" value={phone ?? '-'} />
+          <Row label="E-posta" value={email ?? '-'} />
           <Row label="Rol" value="Antrenör" />
           <Row label="Grup" value={groupName ?? '—'} />
           <Row label="Okul" value={schoolName ?? '—'} />

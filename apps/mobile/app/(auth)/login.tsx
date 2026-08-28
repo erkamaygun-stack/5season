@@ -1,39 +1,44 @@
 import { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, Image,
-  KeyboardAvoidingView, Platform, ActivityIndicator, StatusBar,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../lib/auth-context';
 
 export default function LoginScreen() {
-  const [phone, setPhone] = useState('');
-  const [focused, setFocused] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [focused, setFocused] = useState<'email' | 'password' | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { login } = useAuth();
 
-  const digits = phone.replace(/\D/g, '');
-  const isValid = digits.length === 10;
+  const isValid = /\S+@\S+\.\S+/.test(email.trim()) && password.length >= 8;
 
   async function handleSubmit() {
     if (!isValid) return;
     setError(null);
     setLoading(true);
-    const { error: err } = await login(digits);
+    const { error: loginError } = await login(email.trim().toLowerCase(), password);
     setLoading(false);
-    if (err) setError(err);
+    if (loginError) setError(loginError);
   }
 
   return (
     <SafeAreaView className="flex-1 bg-white">
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* Logo */}
         <View className="flex-1 justify-center items-center">
           <Image
             source={require('../../assets/5mevsim.png')}
@@ -42,50 +47,54 @@ export default function LoginScreen() {
           />
         </View>
 
-        {/* Form */}
         <View className="px-6 pb-10">
-          <Text
-            className="text-3xl font-bold text-gray-900 mb-6"
-            style={{ letterSpacing: 1 }}
-          >
-            GİRİŞ YAP
+          <Text className="text-3xl font-bold text-gray-900 mb-2" style={{ letterSpacing: 1 }}>
+            ANTRENÖR GİRİŞİ
+          </Text>
+          <Text className="text-sm text-gray-500 mb-6">
+            Yönetici tarafından davet edilen e-posta adresinizle giriş yapın.
           </Text>
 
-          <View
-            className="flex-row items-stretch rounded-xl overflow-hidden mb-1"
+          <TextInput
+            className="w-full rounded-xl px-4 text-base text-gray-900 mb-3"
             style={{
+              paddingVertical: 14,
               borderWidth: 2,
-              borderColor: focused ? '#dc2626' : '#e5e7eb',
+              borderColor: focused === 'email' ? '#dc2626' : '#e5e7eb',
             }}
-          >
-            <View
-              className="items-center justify-center px-4"
-              style={{ backgroundColor: '#f9fafb', borderRightWidth: 1, borderRightColor: '#e5e7eb' }}
-            >
-              <Text className="text-sm font-bold text-gray-500">+90</Text>
-            </View>
-            <TextInput
-              className="flex-1 px-4 text-base text-gray-900"
-              style={{ paddingVertical: 14 }}
-              placeholder="5551234567"
-              placeholderTextColor="#9ca3af"
-              keyboardType="phone-pad"
-              maxLength={10}
-              value={phone}
-              onChangeText={(t) => { setPhone(t.replace(/\D/g, '')); setError(null); }}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              editable={!loading}
-              autoFocus
-              returnKeyType="done"
-              onSubmitEditing={handleSubmit}
-            />
-            <View className="items-center justify-center pr-4" style={{ width: 36 }}>
-              {isValid && <Text style={{ color: '#22c55e', fontSize: 18 }}>✓</Text>}
-            </View>
-          </View>
+            placeholder="antrenor@ornek.com"
+            placeholderTextColor="#9ca3af"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={email}
+            onChangeText={(value) => { setEmail(value); setError(null); }}
+            onFocus={() => setFocused('email')}
+            onBlur={() => setFocused(null)}
+            editable={!loading}
+            returnKeyType="next"
+          />
 
-          <View style={{ height: 20, justifyContent: 'center', marginBottom: 16 }}>
+          <TextInput
+            className="w-full rounded-xl px-4 text-base text-gray-900"
+            style={{
+              paddingVertical: 14,
+              borderWidth: 2,
+              borderColor: focused === 'password' ? '#dc2626' : '#e5e7eb',
+            }}
+            placeholder="Parola"
+            placeholderTextColor="#9ca3af"
+            secureTextEntry
+            value={password}
+            onChangeText={(value) => { setPassword(value); setError(null); }}
+            onFocus={() => setFocused('password')}
+            onBlur={() => setFocused(null)}
+            editable={!loading}
+            returnKeyType="done"
+            onSubmitEditing={handleSubmit}
+          />
+
+          <View style={{ minHeight: 40, justifyContent: 'center' }}>
             {error ? <Text className="text-red-500 text-xs">{error}</Text> : null}
           </View>
 
@@ -99,7 +108,7 @@ export default function LoginScreen() {
               <ActivityIndicator color={isValid ? '#fff' : '#9ca3af'} />
             ) : (
               <Text className={`text-base font-semibold ${isValid ? 'text-white' : 'text-gray-400'}`}>
-                Doğrulama Kodu Gönder
+                Giriş Yap
               </Text>
             )}
           </TouchableOpacity>
