@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatCurrency, formatDate, TR_DAYS } from '@/lib/utils'
 import { Pencil, Plus, Trash2, UserMinus, Check } from 'lucide-react'
-import { GROUP_COLORS } from '@/lib/group-colors'
+import { GROUP_COLORS, isLightColor } from '@/lib/group-colors'
 import { GROUP_CATEGORIES, getGroupCategoryLabel, type GroupCategory } from '@/lib/group-categories'
 import {
   updateGroup,
@@ -539,20 +539,22 @@ export default function GrupDetailTabs({
                 <div className="flex flex-wrap gap-2">
                   {GROUP_COLORS.map((c) => {
                     const selected = group.color === c.key
+                    const light = isLightColor(c.hex)
                     return (
                       <button
                         key={c.key}
                         type="button"
                         disabled={colorPending}
                         onClick={() => handleColorChange(c.key)}
-                        className={`flex items-center justify-center w-7 h-7 rounded-full ${c.swatch} transition-transform hover:scale-110 disabled:opacity-50 ${
-                          selected ? 'ring-2 ring-offset-2 ring-foreground ring-offset-card' : ''
-                        }`}
-                        title={c.key}
+                        className={`flex items-center justify-center w-7 h-7 rounded-full transition-transform hover:scale-110 disabled:opacity-50 ${
+                          light ? 'ring-1 ring-inset ring-foreground/20' : ''
+                        } ${selected ? 'ring-2 ring-offset-2 ring-foreground ring-offset-card' : ''}`}
+                        style={{ backgroundColor: c.hex }}
+                        title={c.label}
                       >
                         {selected && (
                           <Check
-                            className={`w-3.5 h-3.5 ${c.key === 'white' ? 'text-neutral-900' : 'text-white'}`}
+                            className={`w-3.5 h-3.5 ${light ? 'text-neutral-900' : 'text-white'}`}
                           />
                         )}
                       </button>

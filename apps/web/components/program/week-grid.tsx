@@ -1,6 +1,9 @@
 // Program takvimi ızgarası — hem /program sayfasında hem anasayfadaki mini
 // takvimde kullanılır; veri çekmez, saf props alır.
 
+import { getGroupColor, hexToRgba, lightenHex, darkenHex, isLightColor } from '@/lib/group-colors'
+import { compareGroupNames } from '@/lib/utils'
+
 export type SlotRow = {
   id: string
   day_of_week: number // Postgres DOW: 0=Sun, 1=Mon … 6=Sat
@@ -12,6 +15,7 @@ export type SlotRow = {
     name: string
     primary_coach_id: string | null
     coachName: string | null
+    color: string | null
   }
 }
 
@@ -33,18 +37,20 @@ export type WeekDay = {
 // Pzt→1, Sal→2, Çar→3, Per→4, Cum→5, Cmt→6, Paz→0
 export const DISPLAY_TO_DOW = [1, 2, 3, 4, 5, 6, 0]
 
-export const SLOT_COLORS = [
-  { bg: '#1e3a5f', border: '#3b82f6', text: '#93c5fd' }, // blue
-  { bg: '#064e3b', border: '#10b981', text: '#6ee7b7' }, // emerald
-  { bg: '#2e1065', border: '#8b5cf6', text: '#c4b5fd' }, // violet
-  { bg: '#431407', border: '#f97316', text: '#fdba74' }, // orange
-  { bg: '#500724', border: '#ec4899', text: '#f9a8d4' }, // pink
-  { bg: '#164e63', border: '#06b6d4', text: '#67e8f9' }, // cyan
-  { bg: '#451a03', border: '#f59e0b', text: '#fcd34d' }, // amber
-  { bg: '#052e16', border: '#22c55e', text: '#86efac' }, // green
-]
-
 export const CANCELLED_COLOR = { bg: '#450a0a', border: '#ef4444', text: '#fca5a5' }
+
+// Grubun atanmış rengine göre takvim slotu rengi üretir
+export function getSlotColor(colorKey: string | null | undefined, fallbackIndex: number) {
+  const c = getGroupColor(colorKey, fallbackIndex)
+  // Beyaz/açık renkler kart zemininde görünmez olur (ör. "U13" beyaza denk gelirse
+  // kaybolur) — bu durumda kenarlık/metni koyulaştırıp görünür tutuyoruz
+  const light = isLightColor(c.hex)
+  return {
+    bg: hexToRgba(c.hex, light ? 0.35 : 0.18),
+    border: light ? darkenHex(c.hex, 0.35) : c.hex,
+    text: light ? darkenHex(c.hex, 0.55) : lightenHex(c.hex, 0.55),
+  }
+}
 
 export function toMins(time: string): number {
   const [h, m] = time.split(':').map(Number)
@@ -97,13 +103,9 @@ export default function WeekGrid({
     (a, b) => {
       const na = slots.find((s) => s.group_id === a)?.groups.name ?? ''
       const nb = slots.find((s) => s.group_id === b)?.groups.name ?? ''
-      return na.localeCompare(nb, 'tr')
+      return compareGroupNames(na, nb)
     },
   )
-  const groupColor = (gid: string) =>
-    SLOT_COLORS[sortedGroupIds.indexOf(gid) % SLOT_COLORS.length] ??
-    SLOT_COLORS[0]
-
   // Oturumları "dow-groupId-HH:MM" ile hızlı erişim için indeksle
   const sessionKey = (dow: number, groupId: string, startTime: string) =>
     `${dow}-${groupId}-${startTime.slice(0, 5)}`
@@ -209,7 +211,7 @@ export default function WeekGrid({
                 const isCancelled = session?.status === 'cancelled'
                 const color = isCancelled
                   ? CANCELLED_COLOR
-                  : groupColor(slot.group_id)
+                  : getSlotColor(slot.groups.color, sortedGroupIds.indexOf(slot.group_id))
 
                 const linkHref = href(slot)
 

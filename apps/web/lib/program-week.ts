@@ -36,7 +36,7 @@ export async function getWeekData(
   const { data: slotsRaw } = await supabase
     .from('group_schedule_slots')
     .select(
-      'id, day_of_week, start_time, end_time, group_id, groups!inner(id, name, is_active, primary_coach_id)',
+      'id, day_of_week, start_time, end_time, group_id, groups!inner(id, name, is_active, primary_coach_id, color)',
     )
     .order('start_time')
 
@@ -75,6 +75,7 @@ export async function getWeekData(
       coachName: s.groups.primary_coach_id
         ? (staffMap[s.groups.primary_coach_id] ?? null)
         : null,
+      color: s.groups.color ?? null,
     },
   }))
 

@@ -130,6 +130,70 @@ export async function deleteStaff(staffId: string, profileId?: string) {
   revalidatePath('/finans')
 }
 
+// Prototip: Steam tarzı detay penceresi için personel + gruplar + maaş geçmişini
+// tek seferde döner (bkz. StaffDetailWindow). page.tsx'teki mantığın aynısı.
+export async function getStaffDetail(staffId: string) {
+  const supabase = await createClient()
+
+  const { data: staff } = await supabase
+    .from('staff')
+    .select('id, full_name, staff_type, monthly_salary, hire_date, is_active, notes, profile_id')
+    .eq('id', staffId)
+    .single()
+
+  if (!staff) throw new Error('Personel bulunamadı')
+
+  let phone: string | null = null
+  if ((staff as any).profile_id) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('phone')
+      .eq('id', (staff as any).profile_id)
+      .single()
+    phone = profile?.phone ?? null
+  } else if (staff.notes?.startsWith('Telefon:')) {
+    phone = staff.notes.replace('Telefon:', '').trim()
+  }
+
+  const [{ data: groups }, { data: salaryPayments }] = await Promise.all([
+    supabase
+      .from('groups')
+      .select('id, name, is_active')
+      .eq('primary_coach_id', staffId)
+      .order('name'),
+    supabase
+      .from('staff_salary_payments')
+      .select('id, period_year, period_month, amount, payment_method, notes, paid_at')
+      .eq('staff_id', staffId)
+      .order('period_year', { ascending: false })
+      .order('period_month', { ascending: false }),
+  ])
+
+  return {
+    staff: { ...(staff as any), phone } as {
+      id: string
+      full_name: string
+      staff_type: string
+      monthly_salary: number | null
+      hire_date: string | null
+      is_active: boolean | null
+      notes: string | null
+      profile_id: string | null
+      phone: string | null
+    },
+    groups: (groups ?? []) as { id: string; name: string; is_active: boolean | null }[],
+    salaryPayments: (salaryPayments ?? []) as {
+      id: string
+      period_year: number
+      period_month: number
+      amount: number
+      payment_method: string | null
+      notes: string | null
+      paid_at: string | null
+    }[],
+  }
+}
+
 export async function paySalary(data: {
   staff_id: string
   staff_name: string

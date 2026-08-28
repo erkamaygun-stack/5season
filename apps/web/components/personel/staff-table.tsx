@@ -1,8 +1,9 @@
 'use client'
 
-import Link from 'next/link'
+import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency } from '@/lib/utils'
+import StaffDetailWindow from '@/components/personel/staff-detail-window'
 
 const TYPE_LABEL: Record<string, string> = {
   coach: 'Antrenör',
@@ -20,6 +21,8 @@ interface StaffRow {
 }
 
 export default function StaffTable({ staff }: { staff: StaffRow[] }) {
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
   if (!staff.length) {
     return (
       <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
@@ -44,9 +47,12 @@ export default function StaffTable({ staff }: { staff: StaffRow[] }) {
           {staff.map((s) => (
             <tr key={s.id} className="hover:bg-muted/50">
               <td className="px-4 py-3">
-                <Link href={`/personel/${s.id}`} className="font-medium text-primary hover:underline">
+                <button
+                  onClick={() => setSelectedId(s.id)}
+                  className="font-medium text-primary hover:underline"
+                >
                   {s.full_name}
-                </Link>
+                </button>
               </td>
               <td className="px-4 py-3 text-muted-foreground">{TYPE_LABEL[s.staff_type] ?? s.staff_type}</td>
               <td className="px-4 py-3">
@@ -70,6 +76,12 @@ export default function StaffTable({ staff }: { staff: StaffRow[] }) {
           ))}
         </tbody>
       </table>
+
+      <StaffDetailWindow
+        staffId={selectedId}
+        open={selectedId !== null}
+        onClose={() => setSelectedId(null)}
+      />
     </div>
   )
 }

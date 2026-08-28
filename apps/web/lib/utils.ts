@@ -5,6 +5,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// Grup isimlerini doğal sıraya göre karşılaştırır (örn. "U8" her zaman "U10"dan önce gelir)
+export function compareGroupNames(a: string, b: string): number {
+  return a.localeCompare(b, 'tr', { numeric: true })
+}
+
 export const TR_MONTHS = [
   'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
   'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',

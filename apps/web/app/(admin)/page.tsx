@@ -3,8 +3,9 @@ import { createClient } from '@/lib/supabase/server'
 import { Separator } from '@/components/ui/separator'
 import { Users, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import NotificationBar from '@/components/dashboard/notification-bar'
-import { getGroupColor } from '@/lib/group-colors'
+import { getGroupColor, hexToRgba } from '@/lib/group-colors'
 import { GROUP_CATEGORIES, normalizeGroupCategory } from '@/lib/group-categories'
+import { compareGroupNames } from '@/lib/utils'
 import AddGroupModal from '@/components/gruplar/add-group-modal'
 import TakvimClient from './takvim-client'
 import { getWeekData } from '@/lib/program-week'
@@ -40,7 +41,7 @@ export default async function DashboardPage({
   ])
 
   const fullName = (profileResult.data as any)?.full_name ?? 'Hoşgeldiniz'
-  const groups = (groupsResult.data ?? []) as any[]
+  const groups = ((groupsResult.data ?? []) as any[]).sort((a, b) => compareGroupNames(a.name, b.name))
   const coaches = (coachesResult.data ?? []) as { id: string; full_name: string }[]
 
   const activeStudentIds = groups.flatMap((g) =>
@@ -69,10 +70,6 @@ export default async function DashboardPage({
 
       <Separator />
 
-      <div className="flex items-center justify-end">
-        <AddGroupModal coaches={coaches} />
-      </div>
-
       {GROUP_CATEGORIES.map((cat) => {
         const catGroups = groups.filter((g) => normalizeGroupCategory(g.category) === cat.value)
 
@@ -92,10 +89,15 @@ export default async function DashboardPage({
                   <Link key={g.id} href={`/gruplar/${g.id}`} className="block">
                     <div className="h-full rounded-xl bg-card p-5 ring-1 ring-foreground/10 space-y-2 hover:bg-muted/50 transition-colors">
                       <div className="flex items-center gap-2">
-                        <span className={`flex items-center justify-center w-7 h-7 rounded-full shrink-0 ${color.bg}`}>
-                          <Users className={`w-3.5 h-3.5 ${color.text}`} />
+                        <span
+                          className="flex items-center justify-center w-7 h-7 rounded-full shrink-0"
+                          style={{ backgroundColor: hexToRgba(color.hex, 0.15) }}
+                        >
+                          <Users className="w-3.5 h-3.5" style={{ color: color.hex }} />
                         </span>
-                        <span className={`text-sm font-semibold truncate ${color.text}`}>{g.name}</span>
+                        <span className="text-sm font-semibold truncate" style={{ color: color.hex }}>
+                          {g.name}
+                        </span>
                       </div>
                       <p className="text-xs text-muted-foreground truncate">
                         {g.staff?.full_name ? `Antrenör: ${g.staff.full_name}` : 'Antrenör atanmadı'}
@@ -126,6 +128,10 @@ export default async function DashboardPage({
           </div>
         )
       })}
+
+      <div className="flex items-center justify-end">
+        <AddGroupModal coaches={coaches} />
+      </div>
 
       <Separator />
 

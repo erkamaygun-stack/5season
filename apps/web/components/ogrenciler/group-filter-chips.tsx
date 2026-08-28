@@ -3,8 +3,7 @@
 
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { cn } from '@/lib/utils'
-import { GROUP_CATEGORIES, normalizeGroupCategory } from '@/lib/group-categories'
+import { cn, compareGroupNames } from '@/lib/utils'
 
 interface Group {
   id: string
@@ -32,28 +31,18 @@ export default function GroupFilterChips({ groups }: { groups: Group[] }) {
     )
   }
 
+  const sortedGroups = [...groups].sort((a, b) => compareGroupNames(a.name, b.name))
+
   return (
-    <div className="space-y-2">
+    <div className="flex flex-wrap items-center gap-2">
       <Link href={chipHref(null)} className={chipClass(!activeGroupId)}>
         Tümü
       </Link>
-      {GROUP_CATEGORIES.map((cat) => {
-        const catGroups = groups.filter((g) => normalizeGroupCategory(g.category) === cat.value)
-        if (catGroups.length === 0) return null
-
-        return (
-          <div key={cat.value} className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground w-20 shrink-0">
-              {cat.label}
-            </span>
-            {catGroups.map((g) => (
-              <Link key={g.id} href={chipHref(g.id)} className={chipClass(activeGroupId === g.id)}>
-                {g.name}
-              </Link>
-            ))}
-          </div>
-        )
-      })}
+      {sortedGroups.map((g) => (
+        <Link key={g.id} href={chipHref(g.id)} className={chipClass(activeGroupId === g.id)}>
+          {g.name}
+        </Link>
+      ))}
     </div>
   )
 }
