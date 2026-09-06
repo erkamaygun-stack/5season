@@ -27,15 +27,15 @@ export default function AidatGrid({ students, invoiceMap, year }: Props) {
   function changeYear(delta: number) {
     const params = new URLSearchParams()
     params.set('year', String(year + delta))
-    router.push(`/aidat?${params.toString()}`)
+    router.push(`/finans?tab=aidat&${params.toString()}`)
   }
 
   return (
     <>
       <div className="flex items-center gap-3 mb-4">
-        <Button variant="outline" size="icon" onClick={() => changeYear(-1)}><ChevronLeft className="w-4 h-4" /></Button>
+        <Button variant="outline" size="icon" aria-label="Önceki yıl" title="Önceki yıl" onClick={() => changeYear(-1)}><ChevronLeft className="w-4 h-4" /></Button>
         <span className="font-semibold text-foreground w-12 text-center">{year}</span>
-        <Button variant="outline" size="icon" onClick={() => changeYear(1)}><ChevronRight className="w-4 h-4" /></Button>
+        <Button variant="outline" size="icon" aria-label="Sonraki yıl" title="Sonraki yıl" onClick={() => changeYear(1)}><ChevronRight className="w-4 h-4" /></Button>
       </div>
 
       <div className="rounded-lg border bg-card overflow-auto">

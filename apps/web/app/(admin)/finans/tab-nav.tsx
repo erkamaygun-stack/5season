@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 const TABS = [
   { key: 'aidat', label: 'Aidat' },
   { key: 'dekontlar', label: 'Bekleyen Dekontlar' },
-  { key: 'giderler', label: 'Giderler' },
+  { key: 'giderler', label: 'Personel ve Giderler' },
   { key: 'raporlar', label: 'Raporlar' },
 ] as const
 

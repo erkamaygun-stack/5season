@@ -19,8 +19,28 @@ import {
   canTransitionReceipt,
 } from '../lib/domain/receipt-state.ts'
 import { createWhatsAppProvider } from '../lib/integrations/whatsapp/provider.ts'
+import { calculateAge, toLocalDateString } from '../lib/utils.ts'
+import { resolveSafeDevelopmentTarget, resolveWritableStagingTarget } from '../lib/safety/dev-environment.mjs'
+import { canAccessWebPanel } from '../lib/auth/panel-access.ts'
+import { safePasswordResetNextPath } from '../lib/auth/reset-redirect.ts'
 
 const LOCAL_KEY = 'local-anon-key'
+
+test('web panel accepts only active administrator profiles', () => {
+  assert.equal(canAccessWebPanel({ role: 'school_admin', is_active: true }), true)
+  assert.equal(canAccessWebPanel({ role: 'super_admin', is_active: true }), true)
+  assert.equal(canAccessWebPanel({ role: 'coach', is_active: true }), false)
+  assert.equal(canAccessWebPanel({ role: 'school_admin', is_active: false }), false)
+  assert.equal(canAccessWebPanel(null), false)
+})
+
+test('password reset callback accepts only local application paths', () => {
+  assert.equal(safePasswordResetNextPath('/update-password'), '/update-password')
+  assert.equal(safePasswordResetNextPath('/update-password?source=email'), '/update-password?source=email')
+  assert.equal(safePasswordResetNextPath('https://example.com'), '/update-password')
+  assert.equal(safePasswordResetNextPath('//example.com'), '/update-password')
+  assert.equal(safePasswordResetNextPath(null), '/update-password')
+})
 
 test('local Supabase does not require protected project refs', () => {
   const result = assertSafeSupabaseTarget({
@@ -32,6 +52,55 @@ test('local Supabase does not require protected project refs', () => {
 
   assert.equal(result.isLocal, true)
   assert.equal(result.projectRef, null)
+})
+
+test('safe dev launcher uses local write mode or remote read-only mode', () => {
+  assert.deepEqual(
+    resolveSafeDevelopmentTarget('http://127.0.0.1:54321', undefined),
+    { kind: 'local', protectedProjectRefs: '' },
+  )
+
+  assert.deepEqual(
+    resolveSafeDevelopmentTarget('https://current-project.supabase.co', 'other-project'),
+    {
+      kind: 'remote_read_only',
+      protectedProjectRefs: 'other-project,current-project',
+    },
+  )
+
+  assert.throws(
+    () => resolveSafeDevelopmentTarget('https://database.example.com', undefined),
+    /local veya tanınan bir Supabase projesi/,
+  )
+})
+
+test('writable staging launcher requires an exact non-production project ref', () => {
+  assert.deepEqual(
+    resolveWritableStagingTarget(
+      'https://staging-ref.supabase.co',
+      'staging-ref',
+      'protected-ref',
+    ),
+    { projectRef: 'staging-ref', protectedProjectRefs: 'protected-ref' },
+  )
+
+  assert.throws(
+    () => resolveWritableStagingTarget(
+      'https://protected-ref.supabase.co',
+      'protected-ref',
+      'protected-ref',
+    ),
+    /protected_supabase_target_blocked/,
+  )
+
+  assert.throws(
+    () => resolveWritableStagingTarget(
+      'https://staging-ref.supabase.co',
+      'different-ref',
+      'protected-ref',
+    ),
+    /staging_supabase_target_mismatch/,
+  )
 })
 
 test('remote development target fails closed without protected refs', () => {
@@ -216,6 +285,7 @@ test('receipt state machine accepts the review-cleanup path and rejects shortcut
 test('WhatsApp provider is disabled by default and sink performs no transport', async () => {
   await assert.rejects(
     () => createWhatsAppProvider('disabled').sendTemplate({
+      phoneNumberId: 'test-phone-id',
       recipient: '+905550000000',
       templateName: 'receipt_result',
       languageCode: 'tr',
@@ -226,6 +296,7 @@ test('WhatsApp provider is disabled by default and sink performs no transport', 
   )
 
   const result = await createWhatsAppProvider('sink').sendTemplate({
+    phoneNumberId: 'test-phone-id',
     recipient: '+905550000000',
     templateName: 'receipt_result',
     languageCode: 'tr',
@@ -233,5 +304,11 @@ test('WhatsApp provider is disabled by default and sink performs no transport', 
     idempotencyKey: 'submission-1',
   })
   assert.equal(result.providerMessageId, 'sink:submission-1')
-  assert.throws(() => createWhatsAppProvider('production'), /live_provider_not_configured/)
+  assert.throws(() => createWhatsAppProvider('production'), /access_token_missing/)
+})
+
+test('calendar helpers do not shift date-only values through UTC', () => {
+  assert.equal(toLocalDateString(new Date(2026, 7, 30, 0, 30)), '2026-08-30')
+  assert.equal(calculateAge('2016-08-31', new Date(2026, 7, 30)), 9)
+  assert.equal(calculateAge('2016-08-30', new Date(2026, 7, 30)), 10)
 })

@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import StudentDetailTabs from '@/components/ogrenciler/detail/student-detail-tabs'
 import { isReadOnlyRealDataTestMode } from '@/lib/safety/environment'
+import { toLocalDateString } from '@/lib/utils'
 
 export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -63,7 +64,9 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
       .from('attendance_records')
       .select('id, status, attendance_sessions(session_date, groups(name))')
       .eq('student_id', id)
-      .gte('attendance_sessions.session_date', new Date(Date.now() - 90 * 864e5).toISOString().split('T')[0])
+      // Request anındaki 90 günlük pencere, statik render değeri değildir.
+      // eslint-disable-next-line react-hooks/purity
+      .gte('attendance_sessions.session_date', toLocalDateString(new Date(Date.now() - 90 * 864e5)))
       .order('attendance_sessions(session_date)', { ascending: false }),
     supabase
       .from('aidat_invoices')

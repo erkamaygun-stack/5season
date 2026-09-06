@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -24,6 +25,7 @@ interface Slot {
 }
 
 export default function AddGroupModal({ coaches }: { coaches: Coach[] }) {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [form, setForm] = useState<{
@@ -78,6 +80,7 @@ export default function AddGroupModal({ coaches }: { coaches: Coach[] }) {
         setOpen(false)
         setForm({ name: '', monthly_fee: '', primary_coach_id: '', category: GROUP_CATEGORIES[0].value })
         setSlots([{ day_of_week: '1', start_time: '16:00', end_time: '17:30' }])
+        router.refresh()
       } catch (err: any) {
         toast.error('Grup oluşturulamadı: ' + (err?.message ?? 'Bilinmeyen hata'))
       }

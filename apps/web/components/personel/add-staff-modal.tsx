@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -12,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { createStaff } from '@/app/(admin)/personel/actions'
 
 export default function AddStaffModal() {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [form, setForm] = useState({
@@ -47,6 +49,7 @@ export default function AddStaffModal() {
         )
         setOpen(false)
         setForm({ full_name: '', staff_type: 'coach', email: '', phone: '', monthly_salary: '' })
+        router.refresh()
       } catch (err: any) {
         toast.error('Personel eklenemedi: ' + (err?.message ?? 'Bilinmeyen hata'))
       }

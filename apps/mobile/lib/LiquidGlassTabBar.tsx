@@ -13,7 +13,7 @@ export function LiquidGlassTabBar({ state, descriptors, navigation, activeColor 
       <View style={styles.bar}>
         <View style={styles.topShine} />
         <View style={styles.row}>
-          {state.routes.map((route, index) => {
+          {state.routes.map((route: { key: string; name: string }, index: number) => {
             const { options } = descriptors[route.key];
             const focused = state.index === index;
             const color = focused ? activeColor : '#9ca3af';

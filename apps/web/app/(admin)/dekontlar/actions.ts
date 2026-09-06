@@ -46,3 +46,33 @@ export async function rejectReceipt(submissionId: string, reason = 'admin_reject
   revalidatePath('/finans')
   revalidatePath('/dekontlar')
 }
+
+export async function matchReceipt(params: {
+  submissionId: string
+  invoiceType: 'aidat' | 'equipment'
+  invoiceId: string
+}) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Oturum bulunamadı')
+
+  const { error } = await (supabase.rpc as any)('match_receipt_submission', {
+    p_submission_id: params.submissionId,
+    p_invoice_type: params.invoiceType,
+    p_invoice_id: params.invoiceId,
+  })
+  if (error) throw new Error('Dekont eşleştirilemedi: ' + error.message)
+  revalidatePath('/finans')
+}
+
+export async function retryReceiptCleanup(submissionId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Oturum bulunamadı')
+
+  const { error } = await (supabase.rpc as any)('retry_receipt_cleanup', {
+    p_submission_id: submissionId,
+  })
+  if (error) throw new Error('Temizleme yeniden sıraya alınamadı: ' + error.message)
+  revalidatePath('/finans')
+}

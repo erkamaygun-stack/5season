@@ -120,10 +120,52 @@ export default async function FinansPage({
       })
     }
 
-    if (!submissions || submissions.length === 0) {
+    if (modernSubmissionsResult.error && !isReadOnlyRealDataTest) {
+      throw new Error('Dekont kuyruğu yüklenemedi')
+    }
+
+    submissions = submissions ?? []
+    let attentionRows: any[] = []
+    let cleanupRows: any[] = []
+    let openAidatRows: any[] = []
+    let openEquipmentRows: any[] = []
+
+    if (!usingLegacyReceipts) {
+      const [attentionResult, cleanupResult, openAidatResult, openEquipmentResult] = await Promise.all([
+        (supabase as any)
+          .from('receipt_submissions')
+          .select('id, status, decision_reason, storage_bucket, storage_path, created_at, guardians(full_name)')
+          .in('status', ['identifying', 'awaiting_selection', 'failed'])
+          .is('decision', null)
+          .order('created_at', { ascending: false }),
+        (supabase as any)
+          .from('receipt_submissions')
+          .select('id, decision, cleanup_last_error, cleanup_attempts')
+          .eq('status', 'failed')
+          .not('decision', 'is', null)
+          .not('storage_path', 'is', null)
+          .order('updated_at', { ascending: false }),
+        supabase
+          .from('aidat_invoices')
+          .select('id, amount, paid_amount, period_year, period_month, students(full_name)')
+          .in('status', ['pending', 'partial'])
+          .order('due_date'),
+        supabase
+          .from('equipment_invoices')
+          .select('id, amount, paid_amount, description, students(full_name)')
+          .in('status', ['pending', 'partial'])
+          .order('created_at'),
+      ])
+      attentionRows = attentionResult.data ?? []
+      cleanupRows = cleanupResult.data ?? []
+      openAidatRows = openAidatResult.data ?? []
+      openEquipmentRows = openEquipmentResult.data ?? []
+    }
+
+    if (submissions.length === 0 && attentionRows.length === 0 && cleanupRows.length === 0) {
       dekontlarContent = (
         <div className="rounded-lg border bg-card p-12 text-center text-sm text-muted-foreground">
-          Onay bekleyen dekont yok.
+          Bekleyen veya müdahale gerektiren dekont yok.
         </div>
       )
     } else {
@@ -173,7 +215,50 @@ export default async function FinansPage({
         })
       )
 
-      dekontlarContent = <DekontlarClient items={dekontlar} />
+      const attentionItems = await Promise.all(attentionRows.map(async (row) => {
+        const urlResult = row.storage_path
+          ? await storageClient.storage.from(row.storage_bucket || 'whatsapp-receipts').createSignedUrl(row.storage_path, 300)
+          : { data: null }
+        return {
+          id: row.id,
+          status: row.status,
+          reason: row.decision_reason,
+          guardianName: row.guardians?.full_name ?? 'Eşleşmemiş numara',
+          signedUrl: urlResult.data?.signedUrl ?? null,
+          createdAt: row.created_at,
+        }
+      }))
+
+      const invoiceOptions = [
+        ...openAidatRows.map((invoice) => ({
+          id: invoice.id,
+          invoiceType: 'aidat' as const,
+          label: `${getMonthName(invoice.period_month)} ${invoice.period_year} Aidat`,
+          studentName: invoice.students?.full_name ?? '—',
+          remainingAmount: Number(invoice.amount) - Number(invoice.paid_amount ?? 0),
+        })),
+        ...openEquipmentRows.map((invoice) => ({
+          id: invoice.id,
+          invoiceType: 'equipment' as const,
+          label: invoice.description ?? 'Ekipman',
+          studentName: invoice.students?.full_name ?? '—',
+          remainingAmount: Number(invoice.amount) - Number(invoice.paid_amount ?? 0),
+        })),
+      ]
+
+      dekontlarContent = (
+        <DekontlarClient
+          items={dekontlar}
+          attentionItems={attentionItems}
+          cleanupItems={cleanupRows.map((row) => ({
+            id: row.id,
+            decision: row.decision,
+            error: row.cleanup_last_error,
+            attempts: row.cleanup_attempts,
+          }))}
+          invoiceOptions={invoiceOptions}
+        />
+      )
     }
   }
 
@@ -250,7 +335,10 @@ export default async function FinansPage({
           </span>
           <AddExpenseModal />
         </div>
-        <GiderlerClient initialExpenses={expenses ?? []} />
+        <GiderlerClient
+          key={(expenses ?? []).map((expense) => expense.id).join(':')}
+          initialExpenses={expenses ?? []}
+        />
       </>
     )
   }

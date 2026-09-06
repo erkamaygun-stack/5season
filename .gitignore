@@ -25,8 +25,8 @@ supabase/.temp/
 # build artifacts
 *.tsbuildinfo
 
-# dev scripts
-scripts/
+# repository-level dev scripts
+/scripts/
 
 # temp planning files
 pages.md

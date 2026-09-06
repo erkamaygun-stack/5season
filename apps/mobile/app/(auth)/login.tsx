@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../lib/auth-context';
+import * as Linking from 'expo-linking';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -19,14 +20,26 @@ export default function LoginScreen() {
   const [focused, setFocused] = useState<'email' | 'password' | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { login } = useAuth();
+  const [message, setMessage] = useState<string | null>(null);
+  const [resetMode, setResetMode] = useState(false);
+  const { login, requestPasswordReset } = useAuth();
 
-  const isValid = /\S+@\S+\.\S+/.test(email.trim()) && password.length >= 8;
+  const emailValid = /\S+@\S+\.\S+/.test(email.trim());
+  const isValid = emailValid && (resetMode || password.length >= 8);
 
   async function handleSubmit() {
     if (!isValid) return;
     setError(null);
+    setMessage(null);
     setLoading(true);
+    if (resetMode) {
+      const redirectTo = Linking.createURL('/update-password');
+      const { error: resetError } = await requestPasswordReset(email, redirectTo);
+      setLoading(false);
+      if (resetError) setError(resetError);
+      else setMessage('Parola sıfırlama bağlantısı e-posta adresinize gönderildi.');
+      return;
+    }
     const { error: loginError } = await login(email.trim().toLowerCase(), password);
     setLoading(false);
     if (loginError) setError(loginError);
@@ -49,10 +62,12 @@ export default function LoginScreen() {
 
         <View className="px-6 pb-10">
           <Text className="text-3xl font-bold text-gray-900 mb-2" style={{ letterSpacing: 1 }}>
-            ANTRENÖR GİRİŞİ
+            {resetMode ? 'PAROLA SIFIRLA' : 'ANTRENÖR GİRİŞİ'}
           </Text>
           <Text className="text-sm text-gray-500 mb-6">
-            Yönetici tarafından davet edilen e-posta adresinizle giriş yapın.
+            {resetMode
+              ? 'Hesabınıza kayıtlı e-posta adresine güvenli bir bağlantı gönderelim.'
+              : 'Yönetici tarafından davet edilen e-posta adresinizle giriş yapın.'}
           </Text>
 
           <TextInput
@@ -75,27 +90,30 @@ export default function LoginScreen() {
             returnKeyType="next"
           />
 
-          <TextInput
-            className="w-full rounded-xl px-4 text-base text-gray-900"
-            style={{
-              paddingVertical: 14,
-              borderWidth: 2,
-              borderColor: focused === 'password' ? '#dc2626' : '#e5e7eb',
-            }}
-            placeholder="Parola"
-            placeholderTextColor="#9ca3af"
-            secureTextEntry
-            value={password}
-            onChangeText={(value) => { setPassword(value); setError(null); }}
-            onFocus={() => setFocused('password')}
-            onBlur={() => setFocused(null)}
-            editable={!loading}
-            returnKeyType="done"
-            onSubmitEditing={handleSubmit}
-          />
+          {!resetMode && (
+            <TextInput
+              className="w-full rounded-xl px-4 text-base text-gray-900"
+              style={{
+                paddingVertical: 14,
+                borderWidth: 2,
+                borderColor: focused === 'password' ? '#dc2626' : '#e5e7eb',
+              }}
+              placeholder="Parola"
+              placeholderTextColor="#9ca3af"
+              secureTextEntry
+              value={password}
+              onChangeText={(value) => { setPassword(value); setError(null); }}
+              onFocus={() => setFocused('password')}
+              onBlur={() => setFocused(null)}
+              editable={!loading}
+              returnKeyType="done"
+              onSubmitEditing={handleSubmit}
+            />
+          )}
 
           <View style={{ minHeight: 40, justifyContent: 'center' }}>
             {error ? <Text className="text-red-500 text-xs">{error}</Text> : null}
+            {message ? <Text className="text-green-600 text-xs">{message}</Text> : null}
           </View>
 
           <TouchableOpacity
@@ -108,9 +126,19 @@ export default function LoginScreen() {
               <ActivityIndicator color={isValid ? '#fff' : '#9ca3af'} />
             ) : (
               <Text className={`text-base font-semibold ${isValid ? 'text-white' : 'text-gray-400'}`}>
-                Giriş Yap
+                {resetMode ? 'Bağlantı Gönder' : 'Giriş Yap'}
               </Text>
             )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            className="items-center py-4"
+            onPress={() => { setResetMode((value) => !value); setError(null); setMessage(null); }}
+            disabled={loading}
+          >
+            <Text className="text-sm font-medium text-red-600">
+              {resetMode ? 'Giriş ekranına dön' : 'Parolamı unuttum'}
+            </Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

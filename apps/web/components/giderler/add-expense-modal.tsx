@@ -2,6 +2,7 @@
 // useState, form submit için
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -10,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { addExpense } from '@/app/(admin)/giderler/actions'
+import { today } from '@/lib/utils'
 
 const CATEGORIES = [
   { value: 'rent', label: 'Kira' },
@@ -20,12 +22,13 @@ const CATEGORIES = [
 ]
 
 export default function AddExpenseModal() {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
     category: '',
     amount: '',
-    expense_date: new Date().toISOString().split('T')[0],
+    expense_date: today(),
     description: '',
     paid_to: '',
   })
@@ -53,7 +56,8 @@ export default function AddExpenseModal() {
       })
       toast.success('Gider eklendi')
       setOpen(false)
-      setForm({ category: '', amount: '', expense_date: new Date().toISOString().split('T')[0], description: '', paid_to: '' })
+      setForm({ category: '', amount: '', expense_date: today(), description: '', paid_to: '' })
+      router.refresh()
     } catch (err: any) {
       toast.error(err.message ?? 'Gider eklenemedi')
     } finally {

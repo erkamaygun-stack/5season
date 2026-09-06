@@ -1,5 +1,5 @@
 import type { createClient } from '@/lib/supabase/server'
-import { TR_DAYS } from '@/lib/utils'
+import { TR_DAYS, toLocalDateString, today } from '@/lib/utils'
 import type { SlotRow, SessionRow, WeekDay } from '@/components/program/week-grid'
 
 export type WeekData = {
@@ -21,8 +21,8 @@ export function getWeekBounds(weekOffset: number) {
   const sunday = new Date(monday)
   sunday.setDate(monday.getDate() + 6)
   return {
-    start: monday.toISOString().split('T')[0],
-    end: sunday.toISOString().split('T')[0],
+    start: toLocalDateString(monday),
+    end: toLocalDateString(sunday),
     monday,
   }
 }
@@ -97,7 +97,7 @@ export async function getWeekData(
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
     return {
-      date: d.toISOString().split('T')[0],
+      date: toLocalDateString(d),
       label: d.getDate().toString(),
       dayName: TR_DAYS[i],
     }
@@ -108,7 +108,7 @@ export async function getWeekData(
     sessions,
     weekDays,
     weekOffset,
-    todayStr: new Date().toISOString().split('T')[0],
+    todayStr: today(),
     weekStart: start,
     weekEnd: end,
   }

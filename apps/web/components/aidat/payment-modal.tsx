@@ -60,11 +60,11 @@ export default function PaymentModal({ invoice, onClose, onSuccess }: Props) {
           <DialogTitle>Ödeme Al</DialogTitle>
         </DialogHeader>
 
-        <div className="rounded-md bg-gray-50 p-4 text-sm space-y-1 mb-2">
-          <p><span className="text-gray-500">Öğrenci:</span> <span className="font-medium">{invoice.studentName}</span></p>
-          <p><span className="text-gray-500">Toplam:</span> {formatCurrency(invoice.amount)}</p>
-          <p><span className="text-gray-500">Ödenen:</span> {formatCurrency(invoice.paid_amount)}</p>
-          <p><span className="text-gray-500 font-semibold">Kalan:</span> <span className="font-bold text-red-600">{formatCurrency(remaining)}</span></p>
+        <div className="rounded-md bg-muted/50 p-4 text-sm space-y-1 mb-2">
+          <p><span className="text-muted-foreground">Öğrenci:</span> <span className="font-medium">{invoice.studentName}</span></p>
+          <p><span className="text-muted-foreground">Toplam:</span> {formatCurrency(invoice.amount)}</p>
+          <p><span className="text-muted-foreground">Ödenen:</span> {formatCurrency(invoice.paid_amount)}</p>
+          <p><span className="text-muted-foreground font-semibold">Kalan:</span> <span className="font-bold text-destructive">{formatCurrency(remaining)}</span></p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

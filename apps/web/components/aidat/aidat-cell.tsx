@@ -23,9 +23,19 @@ export default function AidatCell({ invoice, onClick }: Props) {
       ? 'bg-yellow-500/20 text-yellow-400 cursor-pointer hover:brightness-110'
       : 'bg-red-500/20 text-red-400 cursor-pointer hover:brightness-110'
 
+  const statusLabel = status === 'paid'
+    ? 'ödendi'
+    : status === 'partial'
+      ? `${formatCurrency(paid_amount)} ödendi, toplam ${formatCurrency(amount)}`
+      : `${formatCurrency(amount)} bekliyor`
+
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
+      disabled={!onClick}
+      aria-label={`Aidat ${statusLabel}${onClick ? '; ödeme gir' : ''}`}
+      title={onClick ? 'Ödeme gir' : 'Ödendi'}
       className={`w-[72px] h-8 rounded flex flex-col items-center justify-center text-[10px] leading-tight font-medium transition-all ${cls}`}
     >
       {status === 'paid' ? (
@@ -38,6 +48,6 @@ export default function AidatCell({ invoice, onClick }: Props) {
       ) : (
         <span>{formatCurrency(amount)}{is_prorated ? ' ½' : ''}</span>
       )}
-    </div>
+    </button>
   )
 }

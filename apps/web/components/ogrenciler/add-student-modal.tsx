@@ -1,7 +1,8 @@
 'use client'
-// useState, useEffect: form state ve enrollment_date client-side init için
+// useState: form state ve enrollment_date client-side init için
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -10,10 +11,12 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { addStudent } from '@/app/(admin)/ogrenciler/actions'
+import { today } from '@/lib/utils'
 
 interface Group { id: string; name: string }
 
 export default function AddStudentModal({ groups }: { groups: Group[] }) {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -29,13 +32,15 @@ export default function AddStudentModal({ groups }: { groups: Group[] }) {
     parent_phone: '',
   })
 
-  // new Date() server ile client arasında timezone farkı yaratıyor; useEffect'te set ediyoruz
-  useEffect(() => {
-    setForm((f) => ({ ...f, enrollment_date: new Date().toISOString().split('T')[0] }))
-  }, [])
-
   function set(key: string, value: string) {
     setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (nextOpen && !form.enrollment_date) {
+      setForm((current) => ({ ...current, enrollment_date: today() }))
+    }
+    setOpen(nextOpen)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -58,9 +63,10 @@ export default function AddStudentModal({ groups }: { groups: Group[] }) {
       setOpen(false)
       setForm({
         full_name: '', birth_date: '', gender: '', blood_type: '',
-        enrollment_date: new Date().toISOString().split('T')[0], // submit sırasında çalışır, SSR'da değil
+        enrollment_date: today(),
         group_id: '', notes: '', parent_name: '', parent_phone: '',
       })
+      router.refresh()
     } catch (err: any) {
       toast.error(err.message ?? 'Öğrenci eklenemedi')
     } finally {
@@ -69,7 +75,7 @@ export default function AddStudentModal({ groups }: { groups: Group[] }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={<Button />}>
         <Plus className="w-4 h-4" /> Öğrenci Ekle
       </DialogTrigger>
@@ -130,12 +136,12 @@ export default function AddStudentModal({ groups }: { groups: Group[] }) {
               value={form.notes}
               onChange={(e) => set('notes', e.target.value)}
               rows={2}
-              className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary resize-none"
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary resize-none"
             />
           </div>
 
           <div className="border-t pt-4 space-y-3">
-            <p className="text-sm font-medium text-gray-700">Veli Bilgileri <span className="text-gray-400 font-normal">(isteğe bağlı)</span></p>
+            <p className="text-sm font-medium text-foreground">Veli Bilgileri <span className="text-muted-foreground font-normal">(isteğe bağlı)</span></p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Veli Adı</Label>
@@ -154,7 +160,9 @@ export default function AddStudentModal({ groups }: { groups: Group[] }) {
                 />
               </div>
             </div>
-            <p className="text-xs text-gray-400">Telefon girilirse veli mobil uygulamaya erişebilir.</p>
+            <p className="text-xs text-muted-foreground">
+              Veli iletişim kaydı oluşturulur; veli için ayrıca kullanıcı hesabı açılmaz.
+            </p>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">

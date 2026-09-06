@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { formatCurrency, formatDate, TR_DAYS } from '@/lib/utils'
+import { formatCurrency, formatDate, today, TR_DAYS } from '@/lib/utils'
 import { Pencil, Plus, Trash2, UserMinus, Check } from 'lucide-react'
 import { GROUP_COLORS, isLightColor } from '@/lib/group-colors'
 import { GROUP_CATEGORIES, getGroupCategoryLabel, type GroupCategory } from '@/lib/group-categories'
@@ -393,6 +393,7 @@ export default function GrupDetailTabs({
   todaySessions,
   groupStudentMap,
   leaveRequests,
+  attendanceTakingEnabled,
 }: {
   group: Group
   sessions: Session[]
@@ -401,6 +402,7 @@ export default function GrupDetailTabs({
   todaySessions: any[]
   groupStudentMap: Record<string, { id: string; full_name: string }[]>
   leaveRequests: any[]
+  attendanceTakingEnabled: boolean
 }) {
   const router = useRouter()
   const [group, setGroup] = useState(initialGroup)
@@ -490,9 +492,11 @@ export default function GrupDetailTabs({
       <Tabs defaultValue="genel" className="w-full">
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="genel">Genel</TabsTrigger>
-          <TabsTrigger value="bugun">
-            Bugünkü Yoklama {todaySessions.length > 0 ? `(${todaySessions.length})` : ''}
-          </TabsTrigger>
+          {attendanceTakingEnabled && (
+            <TabsTrigger value="bugun">
+              Bugünkü Yoklama {todaySessions.length > 0 ? `(${todaySessions.length})` : ''}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="program">Program ({slots.length})</TabsTrigger>
           <TabsTrigger value="yoklama">
             Yoklama Geçmişi ({normalSessions.length})
@@ -620,18 +624,20 @@ export default function GrupDetailTabs({
         </TabsContent>
 
         {/* ── BUGÜNKÜ YOKLAMA ──────────────────────────────────────────────── */}
-        <TabsContent value="bugun">
-          {todaySessions.length === 0 ? (
-            <div className="rounded-lg border bg-card p-12 text-center text-sm text-muted-foreground">
-              Bugün bu grup için planlanmış antrenman yok.
+        {attendanceTakingEnabled && (
+          <TabsContent value="bugun">
+            {todaySessions.length === 0 ? (
+              <div className="rounded-lg border bg-card p-12 text-center text-sm text-muted-foreground">
+                Bugün bu grup için planlanmış antrenman yok.
+              </div>
+            ) : (
+              <YoklamaClient sessions={todaySessions as any} groupStudentMap={groupStudentMap} />
+            )}
+            <div className="mt-6">
+              <LeaveRequestsSection items={leaveRequests as any} />
             </div>
-          ) : (
-            <YoklamaClient sessions={todaySessions as any} groupStudentMap={groupStudentMap} />
-          )}
-          <div className="mt-6">
-            <LeaveRequestsSection items={leaveRequests as any} />
-          </div>
-        </TabsContent>
+          </TabsContent>
+        )}
 
         {/* ── PROGRAM ───────────────────────────────────────────────────────── */}
         <TabsContent value="program">
@@ -816,7 +822,7 @@ export default function GrupDetailTabs({
             {
               id: crypto.randomUUID(),
               is_active: true,
-              joined_at: new Date().toISOString().split('T')[0],
+              joined_at: today(),
               students: student,
             },
           ])

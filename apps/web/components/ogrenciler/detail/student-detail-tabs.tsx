@@ -12,7 +12,7 @@ import { PhoneInput } from '@/components/ui/phone-input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { formatDate, formatCurrency, getMonthName } from '@/lib/utils'
+import { formatDate, formatCurrency, getMonthName, today } from '@/lib/utils'
 import { Upload, Plus, Trash2, UserPlus, Download, ChevronLeft, ChevronRight, Pencil, Phone } from 'lucide-react'
 import {
   deleteStudent,
@@ -105,6 +105,8 @@ export default function StudentDetailTabs({
     const supabase = createClient()
     const bucket = BUCKET[field]
     const ext = file.name.split('.').pop()
+    // Dosya adı kullanıcı eylemi sırasında üretilir; render çıktısının parçası değildir.
+    // eslint-disable-next-line react-hooks/purity
     const path = `${student.id}/${field}_${Date.now()}.${ext}`
     const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, { upsert: true })
     if (uploadError) { toast.error('Dosya yüklenemedi: ' + uploadError.message); return }
@@ -156,33 +158,33 @@ export default function StudentDetailTabs({
   async function leaveGroup(sgId: string, groupName: string) {
     if (!confirm(`${groupName} grubundan çıkarılsın mı?`)) return
     const supabase = createClient()
-    const today = new Date().toISOString().split('T')[0]
+    const todayValue = today()
     const { error } = await supabase
       .from('student_groups')
-      .update({ is_active: false, left_at: today } as any)
+      .update({ is_active: false, left_at: todayValue } as any)
       .eq('id', sgId)
     if (error) toast.error('İşlem başarısız')
     else {
       toast.success(`${groupName} grubundan çıkarıldı`)
       setStudentGroups((prev) =>
-        prev.map((sg: any) => sg.id === sgId ? { ...sg, is_active: false, left_at: today } : sg)
+        prev.map((sg: any) => sg.id === sgId ? { ...sg, is_active: false, left_at: todayValue } : sg)
       )
     }
   }
 
   // ── Equipment management ──────────────────────────────────────────────────
   async function markEquipDelivered(invId: string) {
-    const today = new Date().toISOString().split('T')[0]
+    const todayValue = today()
     const supabase = createClient()
     const { error } = await supabase
       .from('equipment_invoices')
-      .update({ delivered: true, delivered_at: today } as any)
+      .update({ delivered: true, delivered_at: todayValue } as any)
       .eq('id', invId)
     if (error) toast.error('İşlem başarısız')
     else {
       toast.success('Teslim edildi olarak işaretlendi')
       setEquipInvoices((prev) =>
-        prev.map((i) => i.id === invId ? { ...i, delivered: true, delivered_at: today } : i)
+        prev.map((i) => i.id === invId ? { ...i, delivered: true, delivered_at: todayValue } : i)
       )
     }
   }
@@ -291,7 +293,7 @@ export default function StudentDetailTabs({
                             accept=".pdf,.jpg,.jpeg,.png"
                             onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadDoc(field, f) }}
                           />
-                          <Button variant="outline" size="sm" render={<span />}>
+                          <Button variant="outline" size="sm" nativeButton={false} render={<span />}>
                             <Upload className="w-3.5 h-3.5 mr-1.5" />
                             Yükle
                           </Button>
@@ -897,11 +899,13 @@ function AidatPaymentModal({
 
   useEffect(() => {
     if (invoice) {
+      // Seçilen fatura değiştiğinde modal taslağını bilinçli olarak sıfırla.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAmount(String(Math.max(0, (invoice.amount ?? 0) - (invoice.paid_amount ?? 0))))
       setMethod('cash')
       setNotes('')
     }
-  }, [invoice?.id])
+  }, [invoice])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -1094,7 +1098,7 @@ function AddGroupModal({
 }) {
   const available = groups.filter((g) => !activeGroupIds.includes(g.id))
   const [groupId, setGroupId] = useState('')
-  const [joinedAt, setJoinedAt] = useState(new Date().toISOString().split('T')[0])
+  const [joinedAt, setJoinedAt] = useState(today())
   const [loading, setLoading] = useState(false)
 
   async function submit(e: React.FormEvent) {
@@ -1111,7 +1115,7 @@ function AddGroupModal({
     else {
       toast.success('Gruba eklendi')
       onSuccess(data)
-      setGroupId(''); setJoinedAt(new Date().toISOString().split('T')[0])
+      setGroupId(''); setJoinedAt(today())
     }
     setLoading(false)
   }
@@ -1186,6 +1190,8 @@ function EditStudentModal({
 
   useEffect(() => {
     if (open) {
+      // Modal her açıldığında güncel öğrenci kaydından yeni bir düzenleme taslağı oluştur.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFullName(student.full_name ?? '')
       setBirthDate(student.birth_date ?? '')
       setGender(student.gender ?? '')
@@ -1194,7 +1200,7 @@ function EditStudentModal({
       setStatus(student.status ?? 'active')
       setHasUniform(student.has_received_uniform ?? false)
     }
-  }, [open])
+  }, [open, student])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -1210,7 +1216,7 @@ function EditStudentModal({
       status,
       has_received_uniform: hasUniform,
       uniform_received_at: hasUniform && !student.has_received_uniform
-        ? new Date().toISOString().split('T')[0]
+        ? today()
         : student.uniform_received_at,
     }).eq('id', student.id)
     if (error) toast.error('Kaydedilemedi: ' + error.message)
@@ -1322,10 +1328,12 @@ function EquipPaymentModal({
 
   useEffect(() => {
     if (invoice) {
+      // Seçilen fatura değiştiğinde ödeme taslağını yeniden başlat.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAmount(String(Math.max(0, (invoice.amount ?? 0) - (invoice.paid_amount ?? 0))))
       setMethod('cash')
     }
-  }, [invoice?.id])
+  }, [invoice])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -1414,10 +1422,12 @@ function EditParentModal({
 
   useEffect(() => {
     if (target) {
+      // Seçilen veli değiştiğinde modal taslağını kaynaktan yenile.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFullName(target.full_name)
       setPhone(target.phone)
     }
-  }, [target?.id])
+  }, [target])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -1494,7 +1504,11 @@ function AddAidatModal({
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (open) { setYear(String(defaultYear)); setAmount(''); setDueDate('') }
+    if (open) {
+      // Yeni fatura modalı her açılışta temiz bir taslakla başlamalıdır.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setYear(String(defaultYear)); setAmount(''); setDueDate('')
+    }
   }, [open, defaultYear])
 
   async function submit(e: React.FormEvent) {
@@ -1590,10 +1604,12 @@ function EditAidatModal({
 
   useEffect(() => {
     if (invoice) {
+      // Seçilen fatura değiştiğinde düzenleme taslağını kaynaktan yenile.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAmount(String(invoice.amount ?? ''))
       setDueDate(invoice.due_date ?? '')
     }
-  }, [invoice?.id])
+  }, [invoice])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -1659,11 +1675,13 @@ function EditPaymentModal({
 
   useEffect(() => {
     if (payment) {
+      // Seçilen ödeme değiştiğinde düzenleme taslağını kaynaktan yenile.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAmount(String(payment.amount ?? ''))
       setMethod(payment.payment_method ?? 'cash')
       setNotes(payment.notes ?? '')
     }
-  }, [payment?.id])
+  }, [payment])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()

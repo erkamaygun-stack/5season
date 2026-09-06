@@ -42,11 +42,12 @@ export default function HesabimClient({ profile }: { profile: Profile }) {
 
   function handleProfileSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!fullName.trim() || !phone.trim()) return
+    if (!fullName.trim()) return
     startTransition(async () => {
       try {
         await updateProfile({ full_name: fullName, phone, email: email || undefined })
         toast.success('Profil güncellendi')
+        router.refresh()
       } catch (err: any) {
         toast.error(err.message ?? 'Güncellenemedi')
       }
@@ -105,12 +106,11 @@ export default function HesabimClient({ profile }: { profile: Profile }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Telefon *</Label>
+              <Label>Telefon <span className="text-muted-foreground font-normal">(isteğe bağlı)</span></Label>
               <Input
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                required
                 placeholder="+90 5xx xxx xxxx"
               />
             </div>

@@ -56,8 +56,8 @@ export function evaluateOutboundPolicy(input: OutboundPolicyInput): OutboundDeci
   return { allowed: true, route: 'provider' }
 }
 
-function readAllowlist(): string[] {
-  return (process.env.OUTBOUND_RECIPIENT_ALLOWLIST ?? '')
+export function readOutboundRecipientAllowlist(value = process.env.OUTBOUND_RECIPIENT_ALLOWLIST): string[] {
+  return (value ?? '')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean)
@@ -79,7 +79,7 @@ export function assertOutboundDeliveryAllowed(input: {
     appEnvironment: process.env.APP_ENV ?? process.env.NEXT_PUBLIC_APP_ENV ?? 'unknown',
     communicationsStatus: input.communicationsStatus,
     recipient: input.recipient,
-    allowlist: readAllowlist(),
+    allowlist: readOutboundRecipientAllowlist(),
     purposeCode: input.purposeCode,
     consentOrLegalBasisConfirmed: input.consentOrLegalBasisConfirmed,
   })

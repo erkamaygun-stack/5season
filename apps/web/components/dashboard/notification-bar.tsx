@@ -7,6 +7,7 @@ import CancelledSessionsDialog, {
 } from './cancelled-sessions-dialog'
 import AbsencesDialog, { type AbsenceRow } from './absences-dialog'
 import { isReadOnlyRealDataTestMode } from '@/lib/safety/environment'
+import { isAttendanceTakingEnabled } from '@/lib/features'
 
 export default async function NotificationBar() {
   const supabase = await createClient()
@@ -14,6 +15,7 @@ export default async function NotificationBar() {
   const now = new Date()
   const periodYear = now.getFullYear()
   const periodMonth = now.getMonth() + 1
+  const attendanceTakingEnabled = isAttendanceTakingEnabled()
 
   const [
     schoolResult,
@@ -28,19 +30,23 @@ export default async function NotificationBar() {
       .select('id', { count: 'exact', head: true })
       .eq('status', 'pending_review'),
     supabase.from('students').select('id').eq('status', 'active'),
-    supabase
-      .from('attendance_sessions')
-      .select('id, session_date, start_time, end_time, group_id, groups(name), cancelled_by')
-      .eq('status', 'cancelled')
-      .is('acknowledged_at', null)
-      .gte('session_date', todayStr)
-      .order('session_date'),
-    supabase
-      .from('attendance_sessions')
-      .select(
-        'id, group_id, taken_by, groups(name), attendance_records(id, student_id, status, dismissed_at, students(full_name))',
-      )
-      .eq('session_date', todayStr),
+    attendanceTakingEnabled
+      ? supabase
+          .from('attendance_sessions')
+          .select('id, session_date, start_time, end_time, group_id, groups(name), cancelled_by')
+          .eq('status', 'cancelled')
+          .is('acknowledged_at', null)
+          .gte('session_date', todayStr)
+          .order('session_date')
+      : Promise.resolve({ data: [] as any[] }),
+    attendanceTakingEnabled
+      ? supabase
+          .from('attendance_sessions')
+          .select(
+            'id, group_id, taken_by, groups(name), attendance_records(id, student_id, status, dismissed_at, students(full_name))',
+          )
+          .eq('session_date', todayStr)
+      : Promise.resolve({ data: [] as any[] }),
   ])
 
   const collectionDay = (schoolResult.data as any)?.collection_day ?? 1
@@ -144,8 +150,8 @@ export default async function NotificationBar() {
         <span className="font-semibold tabular-nums">{pendingDekont}</span>
         bekleyen dekont
       </Link>
-      <AbsencesDialog absences={absences} />
-      <CancelledSessionsDialog sessions={cancelledSessions} />
+      {attendanceTakingEnabled && <AbsencesDialog absences={absences} />}
+      {attendanceTakingEnabled && <CancelledSessionsDialog sessions={cancelledSessions} />}
     </div>
   )
 }

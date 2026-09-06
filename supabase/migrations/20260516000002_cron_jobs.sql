@@ -10,6 +10,10 @@
 -- çalıştırılabilir.
 -- =====================================================
 
+-- New Supabase projects do not enable the Cron module automatically.
+-- Enabling it here keeps a fresh staging/production install reproducible.
+create extension if not exists pg_cron;
+
 -- 1. Günlük yoklama oturumu üretimi
 --    Hedef : Her gece 23:30 TRT
 --    UTC   : 20:30

@@ -53,3 +53,17 @@ export async function deleteApplication(id: string) {
   if (error) throw new Error(error.message)
   revalidatePath('/basvurular')
 }
+
+export async function transitionApplication(id: string, status: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Oturum bulunamadı')
+
+  const { error } = await (supabase.rpc as any)('transition_application', {
+    p_application_id: id,
+    p_to_status: status,
+    p_note: null,
+  })
+  if (error) throw new Error(error.message)
+  revalidatePath('/ogrenciler')
+}

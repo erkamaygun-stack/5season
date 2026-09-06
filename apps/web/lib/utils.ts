@@ -33,6 +33,21 @@ export function formatDate(date: string | null | undefined): string {
   return new Date(date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
+export function calculateAge(birthDate: string | null | undefined, onDate = new Date()): number | null {
+  if (!birthDate) return null
+  const [year, month, day] = birthDate.split('-').map(Number)
+  if (!year || !month || !day) return null
+  let age = onDate.getFullYear() - year
+  if (onDate.getMonth() + 1 < month || (onDate.getMonth() + 1 === month && onDate.getDate() < day)) age -= 1
+  return age >= 0 ? age : null
+}
+
+// Date-only DB alanlarında UTC dönüşümü kullanma; Türkiye gece saatlerinde gün
+// kaymasını önlemek için takvim tarihini yerel bileşenlerden üret.
+export function toLocalDateString(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 // n ay öncesinin YYYY-MM-DD tarihini döndürür
 export function nMonthsAgo(n: number): string {
   const d = new Date()
@@ -42,8 +57,7 @@ export function nMonthsAgo(n: number): string {
 
 // YYYY-MM-DD formatında bugünün tarihini döndürür (yerel saat)
 export function today(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return toLocalDateString(new Date())
 }
 
 // Bir sonraki tahsilat gününe kalan gün sayısı (bugün dahil değil, 0 = bugün)

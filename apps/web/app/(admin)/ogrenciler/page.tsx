@@ -2,8 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import StudentTable from '@/components/ogrenciler/student-table'
 import KanbanBoard from '@/components/basvurular/kanban-board'
 import GroupFilterChips from '@/components/ogrenciler/group-filter-chips'
+import StudentFilters from '@/components/ogrenciler/student-filters'
 import UyelerTabNav from './tab-nav'
 import { isReadOnlyRealDataTestMode } from '@/lib/safety/environment'
+import { calculateAge } from '@/lib/utils'
 
 const KANBAN_COLUMNS = [
   { status: 'new', label: 'Yeni' },
@@ -18,9 +20,27 @@ const KANBAN_COLUMNS = [
 export default async function OgrencilerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; group_id?: string }>
+  searchParams: Promise<{
+    tab?: string
+    group_id?: string
+    search?: string
+    phone?: string
+    status?: string
+    age_min?: string
+    age_max?: string
+    uniform?: string
+  }>
 }) {
-  const { tab: rawTab, group_id: groupId } = await searchParams
+  const {
+    tab: rawTab,
+    group_id: groupId,
+    search,
+    phone,
+    status,
+    age_min: ageMinValue,
+    age_max: ageMaxValue,
+    uniform,
+  } = await searchParams
 
   const tab = rawTab === 'basvurular' ? 'basvurular' : 'uyeler'
   const supabase = await createClient()
@@ -105,6 +125,30 @@ export default async function OgrencilerPage({
       debt: debtMap[s.id] ?? 0,
     }))
 
+    const normalizedSearch = search?.trim().toLocaleLowerCase('tr-TR')
+    const normalizedPhone = phone?.replace(/\D/g, '')
+    const ageMin = ageMinValue ? Number(ageMinValue) : null
+    const ageMax = ageMaxValue ? Number(ageMaxValue) : null
+    const validStatus = ['active', 'trial', 'passive', 'left'].includes(status ?? '') ? status : null
+
+    studentsWithDebt = studentsWithDebt.filter((student) => {
+      if (normalizedSearch && !student.full_name.toLocaleLowerCase('tr-TR').includes(normalizedSearch)) return false
+      if (validStatus && student.status !== validStatus) return false
+      if (uniform === 'received' && !student.has_received_uniform) return false
+      if (uniform === 'not_received' && student.has_received_uniform) return false
+      if (normalizedPhone) {
+        const hasPhone = (student.guardian_students ?? []).some((link: any) =>
+          link.guardians?.phone_e164?.replace(/\D/g, '').includes(normalizedPhone),
+        )
+        if (!hasPhone) return false
+      }
+      const age = calculateAge(student.birth_date)
+      if (Number.isFinite(ageMin) && age !== null && age < Number(ageMin)) return false
+      if (Number.isFinite(ageMax) && age !== null && age > Number(ageMax)) return false
+      if ((Number.isFinite(ageMin) || Number.isFinite(ageMax)) && age === null) return false
+      return true
+    })
+
     if (groupId) {
       studentsWithDebt = studentsWithDebt.filter((s) =>
         (s.student_groups ?? []).some(
@@ -117,6 +161,8 @@ export default async function OgrencilerPage({
   return (
     <div className="space-y-4">
       <UyelerTabNav />
+
+      {tab === 'uyeler' && <StudentFilters groups={groups} />}
 
       {tab === 'uyeler' && <GroupFilterChips groups={groups} />}
 

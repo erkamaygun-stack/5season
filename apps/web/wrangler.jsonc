@@ -1,0 +1,35 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "5mevsimsk-panel",
+	"compatibility_date": "2026-09-05",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"main": "vinext/server/fetch-handler",
+	"assets": {
+		"directory": "dist/client",
+		"not_found_handling": "none",
+		"binding": "ASSETS"
+	},
+	"cache": {
+		"enabled": true
+	},
+	"version_metadata": {
+		"binding": "CF_VERSION_METADATA"
+	},
+	"vars": {
+		"COACH_INVITE_REDIRECT_URL": "https://panel.5mevsimsk.com/auth/callback?next=/update-password"
+	},
+	"routes": [
+		{
+			"pattern": "panel.5mevsimsk.com",
+			"custom_domain": true
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "VINEXT_KV_CACHE",
+			"id": "64e88904760e44b58b99e854cc22cc06"
+		}
+	]
+}

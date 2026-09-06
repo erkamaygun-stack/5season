@@ -2,9 +2,11 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { router } from 'expo-router';
 import { supabase } from './supabase';
 
+type MobileRole = 'coach' | 'school_admin';
+
 type AuthState = {
   email: string | null;
-  role: 'coach' | null;
+  role: MobileRole | null;
   name: string | null;
   userId: string | null;
   schoolId: string | null;
@@ -17,6 +19,8 @@ type AuthState = {
 
 type AuthContextType = AuthState & {
   login: (email: string, password: string) => Promise<{ error: string | null }>;
+  requestPasswordReset: (email: string, redirectTo: string) => Promise<{ error: string | null }>;
+  updatePassword: (password: string) => Promise<{ error: string | null }>;
   logout: () => Promise<void>;
 };
 
@@ -57,35 +61,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq('id', userId)
       .single();
 
-    if (error || !profile || profile.role !== 'coach' || profile.is_active === false) {
+    const mobileRole: MobileRole | null = profile?.role === 'coach' || profile?.role === 'school_admin'
+      ? profile.role
+      : null;
+
+    if (error || !profile || !mobileRole || !profile.school_id || profile.is_active === false) {
+      await supabase.auth.signOut();
+      setState({ ...EMPTY_STATE });
+      return false;
+    }
+
+    const { data: staffData, error: staffError } = await supabase
+      .from('staff')
+      .select('id')
+      .eq('profile_id', userId)
+      .eq('school_id', profile.school_id)
+      .eq('staff_type', 'coach')
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle();
+
+    if (staffError || !staffData) {
+      await supabase.auth.signOut();
+      setState({ ...EMPTY_STATE });
+      return false;
+    }
+
+    const { error: acceptanceError } = await (supabase.rpc as any)('accept_coach_invitation');
+    if (acceptanceError) {
       await supabase.auth.signOut();
       setState({ ...EMPTY_STATE });
       return false;
     }
 
     const schoolRow = profile.schools as unknown as { name: string; logo_url: string | null } | null;
-    const { data: staffData } = await supabase
-      .from('staff')
-      .select('id')
-      .eq('profile_id', userId)
-      .eq('is_active', true)
-      .maybeSingle();
-
     let groupName: string | null = null;
-    if (staffData) {
-      const { data: groupData } = await supabase
-        .from('groups')
-        .select('name')
-        .eq('primary_coach_id', staffData.id)
-        .eq('is_active', true)
-        .limit(1)
-        .maybeSingle();
-      groupName = groupData?.name ?? null;
-    }
+    const { data: groupData } = await supabase
+      .from('groups')
+      .select('name')
+      .eq('primary_coach_id', staffData.id)
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle();
+    groupName = groupData?.name ?? null;
 
     setState({
       email,
-      role: 'coach',
+      role: mobileRole,
       name: profile.full_name,
       userId,
       schoolId: profile.school_id ?? null,
@@ -104,9 +126,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: 'E-posta veya parola hatalı.' };
     }
 
-    const isCoach = await fetchCoachProfile(data.user.id, data.user.email ?? email);
-    if (!isCoach) {
-      return { error: 'Bu hesap aktif bir antrenör hesabı değil.' };
+    const hasCoachAppAccess = await fetchCoachProfile(data.user.id, data.user.email ?? email);
+    if (!hasCoachAppAccess) {
+      return { error: 'Bu hesap aktif bir antrenör kaydına bağlı değil.' };
     }
 
     return { error: null };
@@ -118,8 +140,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.replace('/(auth)/login');
   }
 
+  async function requestPasswordReset(email: string, redirectTo: string): Promise<{ error: string | null }> {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo });
+    return { error: error ? 'Parola sıfırlama bağlantısı gönderilemedi.' : null };
+  }
+
+  async function updatePassword(password: string): Promise<{ error: string | null }> {
+    const { error } = await supabase.auth.updateUser({ password });
+    return { error: error ? 'Parola güncellenemedi. Bağlantı süresi dolmuş olabilir.' : null };
+  }
+
   return (
-    <AuthContext.Provider value={{ ...state, login, logout }}>
+    <AuthContext.Provider value={{ ...state, login, requestPasswordReset, updatePassword, logout }}>
       {children}
     </AuthContext.Provider>
   );

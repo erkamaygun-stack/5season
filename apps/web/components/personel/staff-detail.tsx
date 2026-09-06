@@ -289,7 +289,7 @@ export default function StaffDetail({
 }) {
   const router = useRouter()
   const [staff, setStaff] = useState(initialStaff)
-  const [payments, setPayments] = useState(initialPayments)
+  const [payments] = useState(initialPayments)
   const [editModal, setEditModal] = useState(false)
   const [payModal, setPayModal] = useState(false)
 

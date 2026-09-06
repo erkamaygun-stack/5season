@@ -1,4 +1,6 @@
 -- =====================================================
+
+begin;
 -- Storage buckets: health-docs, consent-docs
 -- Bu migration daha önce 20260516000001 içinde
 -- tanımlandı fakat hosted Supabase'e uygulanmadıysa
@@ -20,6 +22,7 @@ values
 on conflict (id) do nothing;
 
 -- health-docs: sadece school_admin / super_admin erişir
+drop policy if exists "health_docs_admin_insert" on storage.objects;
 create policy "health_docs_admin_insert" on storage.objects
   for insert to authenticated
   with check (
@@ -27,6 +30,7 @@ create policy "health_docs_admin_insert" on storage.objects
     and app_current_role() in ('super_admin', 'school_admin')
   );
 
+drop policy if exists "health_docs_admin_select" on storage.objects;
 create policy "health_docs_admin_select" on storage.objects
   for select to authenticated
   using (
@@ -34,6 +38,7 @@ create policy "health_docs_admin_select" on storage.objects
     and app_current_role() in ('super_admin', 'school_admin')
   );
 
+drop policy if exists "health_docs_admin_delete" on storage.objects;
 create policy "health_docs_admin_delete" on storage.objects
   for delete to authenticated
   using (
@@ -42,6 +47,7 @@ create policy "health_docs_admin_delete" on storage.objects
   );
 
 -- consent-docs: sadece school_admin / super_admin erişir
+drop policy if exists "consent_docs_admin_insert" on storage.objects;
 create policy "consent_docs_admin_insert" on storage.objects
   for insert to authenticated
   with check (
@@ -49,6 +55,7 @@ create policy "consent_docs_admin_insert" on storage.objects
     and app_current_role() in ('super_admin', 'school_admin')
   );
 
+drop policy if exists "consent_docs_admin_select" on storage.objects;
 create policy "consent_docs_admin_select" on storage.objects
   for select to authenticated
   using (
@@ -56,9 +63,12 @@ create policy "consent_docs_admin_select" on storage.objects
     and app_current_role() in ('super_admin', 'school_admin')
   );
 
+drop policy if exists "consent_docs_admin_delete" on storage.objects;
 create policy "consent_docs_admin_delete" on storage.objects
   for delete to authenticated
   using (
     bucket_id = 'consent-docs'
     and app_current_role() in ('super_admin', 'school_admin')
   );
+
+commit;

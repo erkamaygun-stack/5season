@@ -10,12 +10,35 @@ type SelectProps = Omit<SelectPrimitive.Root.Props<string>, 'onValueChange'> & {
   onValueChange?: (value: string) => void
 }
 
-function Select({ onValueChange, ...props }: SelectProps) {
+function collectSelectItems(children: React.ReactNode) {
+  const items: Record<string, React.ReactNode> = {}
+
+  function visit(node: React.ReactNode) {
+    React.Children.forEach(node, (child) => {
+      if (!React.isValidElement(child)) return
+      const childProps = child.props as { value?: unknown; children?: React.ReactNode }
+      if (child.type === SelectItem && typeof childProps.value === 'string') {
+        items[childProps.value] = childProps.children
+      }
+      if (childProps.children) visit(childProps.children)
+    })
+  }
+
+  visit(children)
+  return items
+}
+
+function Select({ onValueChange, children, items: suppliedItems, ...props }: SelectProps) {
+  const inferredItems = React.useMemo(() => collectSelectItems(children), [children])
+
   return (
     <SelectPrimitive.Root
       onValueChange={onValueChange ? (v: string | null) => onValueChange(v ?? '') : undefined}
+      items={suppliedItems ?? inferredItems}
       {...props}
-    />
+    >
+      {children}
+    </SelectPrimitive.Root>
   )
 }
 

@@ -11,9 +11,9 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatCurrency, formatDate, getMonthName, TR_MONTHS } from '@/lib/utils'
-import { Pencil, Banknote, Trash2 } from 'lucide-react'
+import { Pencil, Banknote, Mail, Trash2 } from 'lucide-react'
 import { PhoneInput } from '@/components/ui/phone-input'
-import { paySalary, updateStaff, deleteStaff } from '@/app/(admin)/personel/actions'
+import { paySalary, updateStaff, deleteStaff, inviteCoach } from '@/app/(admin)/personel/actions'
 
 const TYPE_LABEL: Record<string, string> = { coach: 'Antrenör', assistant: 'Asistan', other: 'Diğer' }
 const PAYMENT_METHOD_LABEL: Record<string, string> = {
@@ -32,6 +32,8 @@ interface StaffMember {
   notes: string | null
   profile_id: string | null
   phone: string | null
+  invitation_email?: string | null
+  invitation_status?: string | null
 }
 
 interface Group {
@@ -53,7 +55,7 @@ interface SalaryPayment {
 // ============================================================================
 // EDIT STAFF MODAL
 // ============================================================================
-function EditStaffModal({
+export function EditStaffModal({
   staff,
   open,
   onClose,
@@ -152,7 +154,7 @@ function EditStaffModal({
 // ============================================================================
 const now = new Date()
 
-function PaySalaryModal({
+export function PaySalaryModal({
   staff,
   open,
   onClose,
@@ -269,6 +271,26 @@ export default function StaffDetailTabs({
   const [editModal, setEditModal] = useState(false)
   const [payModal, setPayModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [inviting, setInviting] = useState(false)
+
+  async function handleInvite() {
+    setInviting(true)
+    try {
+      const result = await inviteCoach(staff.id)
+      toast.success(
+        result.linkedExisting
+          ? 'Mevcut hesap antrenör uygulamasına bağlandı'
+          : result.suppressed
+            ? 'Davet sink/karantina modunda bastırıldı'
+            : 'Antrenör daveti gönderildi',
+      )
+      router.refresh()
+    } catch (err: any) {
+      toast.error(err.message ?? 'Davet gönderilemedi')
+    } finally {
+      setInviting(false)
+    }
+  }
 
   async function handleDelete() {
     if (!confirm(`${staff.full_name} arşive alınsın ve girişi kapatılsın mı?`)) return
@@ -305,6 +327,12 @@ export default function StaffDetailTabs({
                   <Banknote className="w-3.5 h-3.5 mr-1.5" />
                   Maaş Öde
                 </Button>
+                {staff.staff_type === 'coach' && staff.invitation_email && staff.invitation_status !== 'accepted' && (
+                  <Button size="sm" variant="outline" onClick={handleInvite} disabled={inviting}>
+                    <Mail className="w-3.5 h-3.5 mr-1.5" />
+                    {inviting ? 'Gönderiliyor…' : 'Davet Gönder'}
+                  </Button>
+                )}
                 <Button size="sm" variant="outline" onClick={handleDelete} disabled={deleting}>
                   <Trash2 className="w-3.5 h-3.5 mr-1.5" />
                   {deleting ? 'Arşivleniyor…' : 'Arşive Al'}

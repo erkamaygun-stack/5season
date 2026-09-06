@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export async function updateProfile(data: {
   full_name: string
-  phone: string
+  phone?: string
   email?: string
 }) {
   const supabase = await createClient()
@@ -16,7 +16,7 @@ export async function updateProfile(data: {
     .from('profiles')
     .update({
       full_name: data.full_name.trim(),
-      phone: data.phone.trim(),
+      phone: data.phone?.trim() || null,
       email: data.email?.trim() || null,
     } as any)
     .eq('id', user.id)

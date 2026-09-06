@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import type { GroupCategory } from '@/lib/group-categories'
+import { today } from '@/lib/utils'
+import { GROUP_COLORS } from '@/lib/group-colors'
 
 async function getContext() {
   const supabase = await createClient()
@@ -84,6 +86,7 @@ export async function updateGroup(
 
 export async function updateGroupColor(id: string, color: string) {
   const { supabase } = await getContext()
+  if (!GROUP_COLORS.some((option) => option.key === color)) throw new Error('Geçersiz grup rengi')
 
   const { error } = await supabase
     .from('groups')
@@ -131,7 +134,7 @@ export async function addStudentToGroup(groupId: string, studentId: string) {
   const { error } = await supabase.from('student_groups').insert({
     student_id: studentId,
     group_id: groupId,
-    joined_at: new Date().toISOString().split('T')[0],
+    joined_at: today(),
     is_active: true,
   } as any)
 
@@ -147,7 +150,7 @@ export async function removeStudentFromGroup(studentGroupId: string, groupId: st
     .from('student_groups')
     .update({
       is_active: false,
-      left_at: new Date().toISOString().split('T')[0],
+      left_at: today(),
     } as any)
     .eq('id', studentGroupId)
 

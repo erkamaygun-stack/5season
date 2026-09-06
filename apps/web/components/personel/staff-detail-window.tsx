@@ -10,8 +10,9 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate, getMonthName, cn } from '@/lib/utils'
-import { Pencil, Banknote, Trash2, Loader2 } from 'lucide-react'
-import { getStaffDetail, deleteStaff } from '@/app/(admin)/personel/actions'
+import { Pencil, Banknote, Mail, Trash2, Loader2 } from 'lucide-react'
+import { getStaffDetail, deleteStaff, inviteCoach } from '@/app/(admin)/personel/actions'
+import { EditStaffModal, PaySalaryModal } from './staff-detail-tabs'
 
 const TYPE_LABEL: Record<string, string> = { coach: 'Antrenör', assistant: 'Asistan', other: 'Diğer' }
 const PAYMENT_METHOD_LABEL: Record<string, string> = {
@@ -43,9 +44,14 @@ export default function StaffDetailWindow({
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<StaffDetail | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [editModal, setEditModal] = useState(false)
+  const [payModal, setPayModal] = useState(false)
+  const [inviting, setInviting] = useState(false)
 
   useEffect(() => {
     if (!open || !staffId) return
+    // Yeni personel seçildiğinde pencereyi yükleme durumuna bilinçli olarak sıfırla.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSection('genel')
     setLoading(true)
     setData(null)
@@ -69,9 +75,30 @@ export default function StaffDetailWindow({
     }
   }
 
-  // Prototipte Düzenle / Maaş Öde formları henüz bağlanmadı, sadece görünüm test ediliyor.
-  function notWiredYet() {
-    toast.message('Prototip: bu aksiyon henüz bağlanmadı — sadece pencere görünümü deneniyor.')
+  async function refreshDetail() {
+    if (!staffId) return
+    const updated = await getStaffDetail(staffId)
+    setData(updated)
+  }
+
+  async function handleInvite() {
+    if (!data) return
+    setInviting(true)
+    try {
+      const result = await inviteCoach(data.staff.id)
+      toast.success(
+        result.linkedExisting
+          ? 'Mevcut hesap antrenör uygulamasına bağlandı'
+          : result.suppressed
+            ? 'Davet sink/karantina modunda bastırıldı'
+            : 'Antrenör daveti gönderildi',
+      )
+      await refreshDetail()
+    } catch (err: any) {
+      toast.error(err.message ?? 'Davet gönderilemedi')
+    } finally {
+      setInviting(false)
+    }
   }
 
   return (
@@ -117,14 +144,20 @@ export default function StaffDetailWindow({
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <h2 className="text-sm font-medium text-muted-foreground">Genel Bilgiler</h2>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Button size="sm" variant="outline" onClick={notWiredYet}>
+                        <Button size="sm" variant="outline" onClick={() => setEditModal(true)}>
                           <Pencil className="w-3.5 h-3.5 mr-1.5" />
                           Düzenle
                         </Button>
-                        <Button size="sm" onClick={notWiredYet}>
+                        <Button size="sm" onClick={() => setPayModal(true)}>
                           <Banknote className="w-3.5 h-3.5 mr-1.5" />
                           Maaş Öde
                         </Button>
+                        {data.staff.staff_type === 'coach' && data.staff.invitation_email && data.staff.invitation_status !== 'accepted' && (
+                          <Button size="sm" variant="outline" onClick={handleInvite} disabled={inviting}>
+                            <Mail className="w-3.5 h-3.5 mr-1.5" />
+                            {inviting ? 'Gönderiliyor…' : 'Davet Gönder'}
+                          </Button>
+                        )}
                         <Button size="sm" variant="outline" onClick={handleDelete} disabled={deleting}>
                           <Trash2 className="w-3.5 h-3.5 mr-1.5" />
                           {deleting ? 'Arşivleniyor…' : 'Arşive Al'}
@@ -216,6 +249,31 @@ export default function StaffDetailWindow({
             )}
           </div>
         </div>
+
+        {data && (
+          <>
+            <EditStaffModal
+              staff={data.staff}
+              open={editModal}
+              onClose={() => setEditModal(false)}
+              onSuccess={async () => {
+                setEditModal(false)
+                await refreshDetail()
+                router.refresh()
+              }}
+            />
+            <PaySalaryModal
+              staff={data.staff}
+              open={payModal}
+              onClose={() => setPayModal(false)}
+              onSuccess={async () => {
+                setPayModal(false)
+                await refreshDetail()
+                router.refresh()
+              }}
+            />
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )

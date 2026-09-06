@@ -1,17 +1,14 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PhoneInput } from '@/components/ui/phone-input'
 import { formatDate } from '@/lib/utils'
-import { createApplication, deleteApplication } from '@/app/(admin)/basvurular/actions'
+import { createApplication, deleteApplication, transitionApplication } from '@/app/(admin)/basvurular/actions'
 import { Plus, Trash2 } from 'lucide-react'
 
 interface Application {
@@ -99,7 +96,6 @@ function AddApplicationModal({ onClose, onAdded }: { onClose: () => void; onAdde
 }
 
 export default function KanbanBoard({ applications: initial, columns }: Props) {
-  const router = useRouter()
   const [apps, setApps] = useState(initial)
   const [dragging, setDragging] = useState<string | null>(null)
   const [addModal, setAddModal] = useState(false)
@@ -125,22 +121,9 @@ export default function KanbanBoard({ applications: initial, columns }: Props) {
 
     setApps((a) => a.map((x) => x.id === id ? { ...x, status: newStatus } : x))
 
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    const { error: updateErr } = await supabase
-      .from('applications')
-      .update({ status: newStatus } as any)
-      .eq('id', id)
-
-    await supabase.from('application_status_history').insert({
-      application_id: id,
-      from_status: prev.status,
-      to_status: newStatus,
-      changed_by: user?.id ?? null,
-    })
-
-    if (updateErr) {
+    try {
+      await transitionApplication(id, newStatus)
+    } catch {
       toast.error('Durum güncellenemedi')
       setApps((a) => a.map((x) => x.id === id ? { ...x, status: prev.status } : x))
     }

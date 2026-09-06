@@ -2,7 +2,6 @@
 // useState, edit/delete modalları için
 
 import { useState, useTransition, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -56,6 +55,8 @@ function EditExpenseModal({
 
   useEffect(() => {
     if (expense) {
+      // Seçilen gider değiştiğinde modal taslağını kaynaktan yenile.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm({
         category: expense.category,
         amount: String(expense.amount),
@@ -64,7 +65,7 @@ function EditExpenseModal({
         paid_to: expense.paid_to ?? '',
       })
     }
-  }, [expense?.id])
+  }, [expense])
 
   function set(key: string, value: string) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -139,12 +140,9 @@ function EditExpenseModal({
 }
 
 export default function GiderlerClient({ initialExpenses }: { initialExpenses: Expense[] }) {
-  const router = useRouter()
   const [expenses, setExpenses] = useState(initialExpenses)
   const [editTarget, setEditTarget] = useState<Expense | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-
-  const total = expenses.reduce((sum, e) => sum + (e.amount ?? 0), 0)
 
   async function handleDelete(expense: Expense) {
     if (!confirm('Bu gider kaydı silinsin mi?')) return
@@ -196,6 +194,8 @@ export default function GiderlerClient({ initialExpenses }: { initialExpenses: E
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 p-0"
+                        aria-label="Gideri düzenle"
+                        title="Gideri düzenle"
                         onClick={() => setEditTarget(e)}
                       >
                         <Pencil className="w-3.5 h-3.5" />
@@ -204,6 +204,8 @@ export default function GiderlerClient({ initialExpenses }: { initialExpenses: E
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                        aria-label="Gideri sil"
+                        title="Gideri sil"
                         onClick={() => handleDelete(e)}
                         disabled={deletingId === e.id}
                       >

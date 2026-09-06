@@ -10,8 +10,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { approveReceipt, rejectReceipt } from './actions'
-import { Check, X, ZoomIn } from 'lucide-react'
+import { approveReceipt, matchReceipt, rejectReceipt, retryReceiptCleanup } from './actions'
+import { AlertTriangle, Check, Link2, RefreshCw, X, ZoomIn } from 'lucide-react'
 
 type Dekont = {
   id: string
@@ -25,6 +25,30 @@ type Dekont = {
   createdAt: string
   guardianName: string
   guardianPhoneMasked: string
+}
+
+type AttentionItem = {
+  id: string
+  status: string
+  reason: string | null
+  guardianName: string
+  signedUrl: string | null
+  createdAt: string
+}
+
+type CleanupItem = {
+  id: string
+  decision: string
+  error: string | null
+  attempts: number
+}
+
+type InvoiceOption = {
+  id: string
+  invoiceType: 'aidat' | 'equipment'
+  label: string
+  studentName: string
+  remainingAmount: number
 }
 
 function ApproveModal({
@@ -62,17 +86,16 @@ function ApproveModal({
           <DialogTitle>Dekontu Onayla</DialogTitle>
         </DialogHeader>
 
-        <div className="rounded-md bg-gray-50 p-4 text-sm space-y-1 mb-2">
-          <p><span className="text-gray-500">Öğrenci:</span> <span className="font-medium">{dekont.studentName}</span></p>
-          <p><span className="text-gray-500">Veli:</span> {dekont.guardianName} · {dekont.guardianPhoneMasked}</p>
-          <p><span className="text-gray-500">Fatura:</span> {dekont.invoiceLabel}</p>
-          <p><span className="text-gray-500">Fatura tutarı:</span> {formatCurrency(dekont.invoiceAmount)}</p>
+        <div className="rounded-md bg-muted/50 p-4 text-sm space-y-1 mb-2">
+          <p><span className="text-muted-foreground">Öğrenci:</span> <span className="font-medium">{dekont.studentName}</span></p>
+          <p><span className="text-muted-foreground">Veli:</span> {dekont.guardianName} · {dekont.guardianPhoneMasked}</p>
+          <p><span className="text-muted-foreground">Fatura:</span> {dekont.invoiceLabel}</p>
+          <p><span className="text-muted-foreground">Fatura tutarı:</span> {formatCurrency(dekont.invoiceAmount)}</p>
         </div>
 
         {dekont.signedUrl && (
           <div className="mb-2">
             <a href={dekont.signedUrl} target="_blank" rel="noopener noreferrer">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={dekont.signedUrl}
                 alt="Dekont"
@@ -122,10 +145,21 @@ function ApproveModal({
   )
 }
 
-export default function DekontlarClient({ items }: { items: Dekont[] }) {
+export default function DekontlarClient({
+  items,
+  attentionItems = [],
+  cleanupItems = [],
+  invoiceOptions = [],
+}: {
+  items: Dekont[]
+  attentionItems?: AttentionItem[]
+  cleanupItems?: CleanupItem[]
+  invoiceOptions?: InvoiceOption[]
+}) {
   const [approving, setApproving] = useState<Dekont | null>(null)
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [selectedInvoices, setSelectedInvoices] = useState<Record<string, string>>({})
 
   function handleReject(dekont: Dekont) {
     if (!confirm(`${dekont.studentName} — ${dekont.invoiceLabel} için gönderilen dekont reddedilsin mi?`)) return
@@ -142,41 +176,121 @@ export default function DekontlarClient({ items }: { items: Dekont[] }) {
     })
   }
 
+  function handleMatch(item: AttentionItem) {
+    const selected = selectedInvoices[item.id]
+    const option = invoiceOptions.find((candidate) => `${candidate.invoiceType}:${candidate.id}` === selected)
+    if (!option) { toast.error('Öğrenci ve borç seçin'); return }
+    startTransition(async () => {
+      try {
+        await matchReceipt({ submissionId: item.id, invoiceType: option.invoiceType, invoiceId: option.id })
+        toast.success('Dekont inceleme kuyruğuna alındı')
+      } catch (err: any) {
+        toast.error(err.message ?? 'Dekont eşleştirilemedi')
+      }
+    })
+  }
+
+  function handleCleanupRetry(item: CleanupItem) {
+    startTransition(async () => {
+      try {
+        await retryReceiptCleanup(item.id)
+        toast.success('Dosya temizliği yeniden sıraya alındı')
+      } catch (err: any) {
+        toast.error(err.message ?? 'Yeniden sıraya alınamadı')
+      }
+    })
+  }
+
   return (
     <>
-      <div className="rounded-lg border bg-white overflow-hidden">
-        <div className="divide-y">
+      {attentionItems.length > 0 && (
+        <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50/60 overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-amber-200 text-sm font-medium text-amber-900">
+            <AlertTriangle className="w-4 h-4" />
+            Manuel eşleme gereken dekontlar ({attentionItems.length})
+          </div>
+          <div className="divide-y divide-amber-200">
+            {attentionItems.map((item) => (
+              <div key={item.id} className="p-4 grid gap-3 md:grid-cols-[1fr_2fr_auto] md:items-center">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{item.guardianName}</p>
+                  <p className="text-xs text-muted-foreground">{item.reason ?? item.status} · {formatDate(item.createdAt)}</p>
+                  {item.signedUrl && <a className="text-xs text-primary hover:underline" href={item.signedUrl} target="_blank" rel="noreferrer">Görseli aç</a>}
+                </div>
+                <Select
+                  value={selectedInvoices[item.id]}
+                  onValueChange={(value) => setSelectedInvoices((current) => ({ ...current, [item.id]: value }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="Öğrenci ve açık borç seçin" /></SelectTrigger>
+                  <SelectContent>
+                    {invoiceOptions.map((option) => (
+                      <SelectItem key={`${option.invoiceType}:${option.id}`} value={`${option.invoiceType}:${option.id}`}>
+                        {option.studentName} · {option.label} · {formatCurrency(option.remainingAmount)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" onClick={() => handleMatch(item)} disabled={isPending}>
+                  <Link2 className="w-3.5 h-3.5 mr-1" /> Eşleştir
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {cleanupItems.length > 0 && (
+        <div className="mb-5 rounded-lg border border-red-200 bg-red-50/60 overflow-hidden">
+          <div className="px-5 py-3 border-b border-red-200 text-sm font-medium text-red-900">
+            Temizlenemeyen dosyalar ({cleanupItems.length})
+          </div>
+          <div className="divide-y divide-red-200">
+            {cleanupItems.map((item) => (
+              <div key={item.id} className="px-5 py-3 flex items-center justify-between gap-3 text-sm">
+                <span>{item.decision === 'approved' ? 'Onaylanan' : 'Reddedilen'} dekont · {item.attempts} deneme · {item.error ?? 'Bilinmeyen hata'}</span>
+                <Button size="sm" variant="outline" onClick={() => handleCleanupRetry(item)} disabled={isPending}>
+                  <RefreshCw className="w-3.5 h-3.5 mr-1" /> Yeniden Dene
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-lg border bg-card overflow-hidden">
+        {items.length === 0 ? (
+          <div className="p-10 text-center text-sm text-muted-foreground">Onay bekleyen dekont yok.</div>
+        ) : <div className="divide-y">
           {items.map((item) => (
             <div key={item.id} className="flex items-center gap-4 px-5 py-4">
               {/* Küçük resim önizleme */}
-              <div className="flex-shrink-0 w-16 h-16 rounded border overflow-hidden bg-gray-50">
+              <div className="flex-shrink-0 w-16 h-16 rounded border overflow-hidden bg-muted/50">
                 {item.signedUrl ? (
                   <a href={item.signedUrl} target="_blank" rel="noopener noreferrer" className="relative block w-full h-full group">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={item.signedUrl} alt="Dekont" className="w-full h-full object-cover" />
                     <span className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
                       <ZoomIn className="w-4 h-4 text-white" />
                     </span>
                   </a>
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">Yok</div>
+                  <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">Yok</div>
                 )}
               </div>
 
               {/* Bilgiler */}
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-900 text-sm">{item.studentName}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{item.invoiceLabel}</p>
+                <p className="font-medium text-foreground text-sm">{item.studentName}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{item.invoiceLabel}</p>
                 <div className="flex items-center gap-2 mt-1">
                   <Badge variant="secondary" className="text-xs">
                     {item.invoiceType === 'aidat' ? 'Aidat' : 'Ekipman'}
                   </Badge>
-                  <span className="text-xs text-gray-400">{formatCurrency(item.invoiceAmount)}</span>
+                  <span className="text-xs text-muted-foreground">{formatCurrency(item.invoiceAmount)}</span>
                 </div>
               </div>
 
               {/* Tarih */}
-              <div className="text-xs text-gray-400 flex-shrink-0 hidden sm:block">
+              <div className="text-xs text-muted-foreground flex-shrink-0 hidden sm:block">
                 {formatDate(item.createdAt)}
               </div>
 
@@ -199,7 +313,7 @@ export default function DekontlarClient({ items }: { items: Dekont[] }) {
               </div>
             </div>
           ))}
-        </div>
+        </div>}
       </div>
 
       {approving && (

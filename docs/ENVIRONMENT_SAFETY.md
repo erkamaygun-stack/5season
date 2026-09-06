@@ -1,68 +1,44 @@
-# Ortam ve Dış Gönderim Güvenliği
+# Ortam Güvenliği
 
-Bu proje gerçek kullanıcı verisi içeren bağlı Supabase projesini **korunan production** kabul eder. Production project ref, servis anahtarı veya kullanıcı verisi bu belgeye ve repoya yazılmaz.
+Gerçek Supabase projesinin URL ve anahtarları yalnızca yerel `.env` dosyalarında veya Cloudflare secret alanında tutulur. Bu değerler repoya, dokümana ve loglara yazılmaz.
 
-## Zorunlu ortam değişkenleri
+## Yerel geliştirme
 
-Yerel Supabase için:
+`npm run dev` hedef ortamı başlamadan önce denetler:
+
+- Yerel Supabase hedefi yazılabilir.
+- Uzak ve korunan gerçek veri hedefi varsayılan olarak salt okunur açılır.
+- Tanımsız veya çelişkili ortam ayarlarında uygulama başlamaz.
+- Dış gönderim açıkça etkinleştirilmedikçe kapalıdır.
+
+Gerçek veriyi açıkça salt okunur görmek için `npm run dev:real-data:readonly` kullanılabilir. Bu mod kaydetme, silme, RPC, Storage yazma ve yönetici Auth değişikliklerini engeller.
+
+## Canlı beta
+
+Canlı panelde veri değişiklikleri için uygulama ortamı `production` ve veri koruma modu `false` olmalıdır. Korunan proje listesi yine tanımlı kalır; böylece aynı anahtar development veya staging etiketiyle kullanılamaz.
+
+Beta başlangıç ayarları:
 
 ```text
-NEXT_PUBLIC_APP_ENV=development
-NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<local anon key>
-NEXT_PUBLIC_PROTECTED_DATA_MODE=false
+NEXT_PUBLIC_APP_ENV=production
 PROTECTED_DATA_MODE=false
-OUTBOUND_DELIVERY_MODE=disabled
-```
-
-Mobil personel uygulaması aynı kilidi Expo değişkenleriyle uygular:
-
-```text
-EXPO_PUBLIC_APP_ENV=development
-EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
-EXPO_PUBLIC_SUPABASE_ANON_KEY=<local anon key>
-EXPO_PUBLIC_PROTECTED_SUPABASE_PROJECT_REFS=<protected production project ref; uzak hedeflerde zorunlu>
-EXPO_PUBLIC_PROTECTED_DATA_MODE=false
-```
-
-Uzak staging için ayrıca production project ref'i yalnızca secret/config olarak tanımlanır:
-
-```text
-NEXT_PUBLIC_APP_ENV=staging
-NEXT_PUBLIC_PROTECTED_SUPABASE_PROJECT_REFS=<protected production project ref>
 NEXT_PUBLIC_PROTECTED_DATA_MODE=false
-PROTECTED_DATA_MODE=false
 OUTBOUND_DELIVERY_MODE=disabled
+ATTENDANCE_ENABLED=false
+NEXT_PUBLIC_ATTENDANCE_ENABLED=false
 ```
 
-`development`, `test`, `preview`, `staging` veya tanımsız bir ortam uzak Supabase URL'si kullanıyorsa `NEXT_PUBLIC_PROTECTED_SUPABASE_PROJECT_REFS` olmadan uygulama açılmaz. URL bu listedeki bir project ref'e aitse bağlantı daha ilk istemci oluşturulurken reddedilir.
-
-## Veri koruma modu
-
-`PROTECTED_DATA_MODE` ve `NEXT_PUBLIC_PROTECTED_DATA_MODE` açıkça `false` yapılmadığı sürece varsayılan **açıktır**. Bu mod Supabase REST, Storage, Edge Function ve Auth Admin mutasyonlarını ortak fetch sınırında engeller. Normal kullanıcı giriş/çıkış istekleri engellenmez.
-
-Staging/local ortamında sentetik veriyle yazma testi yapılacağı zaman iki değişken de açıkça `false` olmalıdır. Production panelinde koruma kaldırılması ayrı release kararıdır.
-
-## Gerçek veriyi salt-okunur yerel test etme
-
-Mevcut production kayıtlarını yalnızca ekran ve rapor doğrulaması için görmek gerektiğinde normal `npm run dev` yerine aşağıdaki kontrollü komut kullanılır:
-
-```powershell
-cd apps/web
-npm run dev:real-data:readonly
-```
-
-Bu komut mevcut Supabase hedefini çalışma süresince korunan hedef olarak işaretler, uygulamayı development modunda tutar, bütün veri mutasyonlarını fail-closed engeller, dış gönderimi `disabled` yapar ve service-role kullanımını kapatır. E-posta/parola girişi, çıkış, GET sorguları ve private belge için kısa ömürlü signed URL üretimi çalışabilir. Kaydetme, silme, Auth güncelleme, RPC, Storage yükleme/silme ve Edge Function çağrıları engellenir.
-
-Bu mod gerçek veri üzerinde yazma testi için kullanılmaz. Yazma/E2E testleri yalnızca sentetik local veya izole staging veritabanında yapılır.
-
-## Dış gönderim modu
+## Dış gönderim
 
 `OUTBOUND_DELIVERY_MODE` varsayılan olarak `disabled` kabul edilir:
 
-- `disabled`: Her gönderim server tarafında reddedilir.
-- `sink`: Sağlayıcı yerine yerel/sentetik sink kullanılabilir.
-- `allowlist`: Yalnızca `OUTBOUND_RECIPIENT_ALLOWLIST` içindeki test alıcılarına izin verir.
-- `production`: Yalnızca production ortamı, aktif tenant ve doğrulanmış izin/hukuki dayanak birlikte varsa değerlendirilebilir.
+- `disabled`: Gönderim sunucuda reddedilir.
+- `sink`: Mesaj ağ üzerinden gönderilmeden sentetik hedefe yazılır.
+- `allowlist`: Yalnızca açıkça tanımlanan test alıcılarına izin verilir.
+- `production`: Aktif kulüp, hukuki dayanak ve gerekli sağlayıcı ayarları birlikte doğrulanır.
 
-Production Meta, SMTP, SMS veya push kimlik bilgileri local/staging ortamına eklenmez. Karantina sırasında bastırılmış olaylar daha sonra otomatik olarak yeniden oynatılmaz.
+WhatsApp, SMTP, SMS veya push anahtarları yalnızca sunucu secret alanında bulunabilir. İstemciye gönderilen `NEXT_PUBLIC_` veya `EXPO_PUBLIC_` değişkenlerinde gizli anahtar tutulmaz.
+
+## Yayın kontrolü
+
+Yayın öncesinde lint, TypeScript, test, Next.js derlemesi ve Cloudflare derlemesi geçmelidir. Git’e eklenecek dosyalar ayrıca incelenir; `.env`, derleme çıktıları ve secret dosyaları commit edilmez.

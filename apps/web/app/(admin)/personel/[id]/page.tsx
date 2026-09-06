@@ -6,9 +6,8 @@ export default async function PersonelDetailPage({ params }: { params: Promise<{
   const { id } = await params
   const supabase = await createClient()
 
-  const { data: staff } = await supabase
-    .from('staff')
-    .select('id, full_name, staff_type, monthly_salary, hire_date, is_active, notes, profile_id')
+  const { data: staff } = await (supabase.from('staff') as any)
+    .select('id, full_name, staff_type, monthly_salary, hire_date, is_active, notes, profile_id, invitation_email, invitation_status')
     .eq('id', id)
     .single()
 

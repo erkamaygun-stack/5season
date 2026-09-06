@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertOutboundDeliveryAllowed, assertOutboundSystemEnabled } from '@/lib/safety/outbound-policy'
+import { today } from '@/lib/utils'
 
 function toE164(phone: string): string {
   const digits = phone.replace(/\D/g, '')
@@ -44,7 +45,7 @@ export async function createStaff(data: {
     full_name: data.full_name,
     staff_type: data.staff_type,
     monthly_salary: data.monthly_salary ?? null,
-    hire_date: new Date().toISOString().split('T')[0],
+    hire_date: today(),
     is_active: true,
     notes,
     invitation_email: data.staff_type === 'coach' ? normalizedEmail : null,
@@ -59,9 +60,6 @@ export async function createStaff(data: {
 }
 
 export async function inviteCoach(staffId: string) {
-  // Davet e-postası harici iletişimdir; kilit açılmadan personel e-postası dahi okunmaz.
-  assertOutboundSystemEnabled()
-
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Oturum bulunamadı')
@@ -76,7 +74,7 @@ export async function inviteCoach(staffId: string) {
   }
 
   const { data: staff, error: staffError } = await (supabase.from('staff') as any)
-    .select('id, school_id, full_name, staff_type, invitation_email, is_active')
+    .select('id, school_id, full_name, staff_type, invitation_email, invitation_status, profile_id, is_active')
     .eq('id', staffId)
     .eq('school_id', actor.school_id)
     .single()
@@ -84,6 +82,58 @@ export async function inviteCoach(staffId: string) {
     throw new Error('Aktif antrenör kaydı bulunamadı')
   }
   if (!staff.invitation_email) throw new Error('Antrenör e-postası bulunamadı')
+
+  const normalizedEmail = staff.invitation_email.trim().toLowerCase()
+
+  // Aynı okuldaki mevcut yönetici/antrenör hesabını e-posta göndermeden bağla.
+  // Bu yol özellikle yöneticinin aynı hesapla mobil uygulamayı kullanmasını sağlar.
+  if (!staff.profile_id) {
+    const { data: matchingProfiles, error: matchingProfileError } = await supabase
+      .from('profiles')
+      .select('id, role, is_active')
+      .eq('school_id', actor.school_id)
+      .ilike('email', normalizedEmail)
+      .limit(2)
+
+    if (matchingProfileError) throw new Error('Mevcut hesap kontrol edilemedi')
+    if ((matchingProfiles?.length ?? 0) > 1) throw new Error('Bu e-posta birden fazla hesaba bağlı')
+
+    const matchingProfile = matchingProfiles?.[0]
+    if (matchingProfile) {
+      if (matchingProfile.is_active === false || !['coach', 'school_admin'].includes(matchingProfile.role)) {
+        throw new Error('Mevcut hesap antrenör uygulamasına bağlanamaz')
+      }
+
+      const { data: otherCoach } = await (supabase.from('staff') as any)
+        .select('id')
+        .eq('profile_id', matchingProfile.id)
+        .eq('staff_type', 'coach')
+        .eq('is_active', true)
+        .neq('id', staff.id)
+        .limit(1)
+        .maybeSingle()
+      if (otherCoach) throw new Error('Bu hesap zaten aktif bir antrenör kaydına bağlı')
+
+      const { error: linkExistingError } = await (supabase.from('staff') as any)
+        .update({
+          profile_id: matchingProfile.id,
+          invitation_email: normalizedEmail,
+          invitation_status: 'accepted',
+          invitation_accepted_at: new Date().toISOString(),
+          invitation_last_error: null,
+        })
+        .eq('id', staff.id)
+        .eq('school_id', actor.school_id)
+      if (linkExistingError) throw new Error('Mevcut hesap antrenör kaydına bağlanamadı')
+
+      revalidatePath('/personel')
+      revalidatePath(`/personel/${staff.id}`)
+      return { delivered: false, suppressed: false, linkedExisting: true }
+    }
+  }
+
+  // Buradan sonrası gerçekten e-posta gönderir; güvenlik kilitleri açık olmalıdır.
+  assertOutboundSystemEnabled()
 
   const { data: school } = await (supabase.from('schools') as any)
     .select('communications_status')
@@ -102,13 +152,31 @@ export async function inviteCoach(staffId: string) {
       .update({ invitation_status: 'suppressed', invitation_last_error: null })
       .eq('id', staff.id)
       .eq('school_id', actor.school_id)
-    return { delivered: false, suppressed: true }
+    return { delivered: false, suppressed: true, linkedExisting: false }
   }
 
   const redirectTo = process.env.COACH_INVITE_REDIRECT_URL
   if (!redirectTo) throw new Error('coach_invite_redirect_missing')
 
   const admin = createAdminClient()
+  if (staff.profile_id) {
+    const { error: resetError } = await admin.auth.resetPasswordForEmail(staff.invitation_email, { redirectTo })
+    if (resetError) {
+      await (supabase.from('staff') as any)
+        .update({ invitation_status: 'failed', invitation_last_error: 'provider_rejected' })
+        .eq('id', staff.id)
+        .eq('school_id', actor.school_id)
+      throw new Error('Antrenör daveti yeniden gönderilemedi')
+    }
+    await (supabase.from('staff') as any)
+      .update({ invitation_status: 'invited', invitation_sent_at: new Date().toISOString(), invitation_last_error: null })
+      .eq('id', staff.id)
+      .eq('school_id', actor.school_id)
+    revalidatePath('/personel')
+    revalidatePath(`/personel/${staff.id}`)
+    return { delivered: true, suppressed: false, linkedExisting: false }
+  }
+
   const { data: invitation, error: inviteError } = await admin.auth.admin.inviteUserByEmail(
     staff.invitation_email,
     {
@@ -133,7 +201,10 @@ export async function inviteCoach(staffId: string) {
     school_id: actor.school_id,
     is_active: true,
   } as any)
-  if (profileError) throw new Error('Davet oluşturuldu fakat profil bağlanamadı')
+  if (profileError) {
+    await admin.auth.admin.deleteUser(invitation.user.id)
+    throw new Error('Davet oluşturuldu fakat profil bağlanamadı')
+  }
 
   const { error: linkError } = await (supabase.from('staff') as any)
     .update({
@@ -144,11 +215,16 @@ export async function inviteCoach(staffId: string) {
     })
     .eq('id', staff.id)
     .eq('school_id', actor.school_id)
-  if (linkError) throw new Error('Davet oluşturuldu fakat personel hesabı bağlanamadı')
+  if (linkError) {
+    // Yalnızca bu davet çağrısında yeni oluşturulan kullanıcıyı telafi et.
+    await admin.from('profiles').delete().eq('id', invitation.user.id)
+    await admin.auth.admin.deleteUser(invitation.user.id)
+    throw new Error('Davet oluşturuldu fakat personel hesabı bağlanamadı')
+  }
 
   revalidatePath('/personel')
   revalidatePath(`/personel/${staff.id}`)
-  return { delivered: true, suppressed: false }
+  return { delivered: true, suppressed: false, linkedExisting: false }
 }
 
 export async function updateStaff(staffId: string, data: {
@@ -163,16 +239,16 @@ export async function updateStaff(staffId: string, data: {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Oturum bulunamadı')
 
-  const { error } = await supabase
-    .from('staff')
-    .update({ full_name: data.full_name, staff_type: data.staff_type, monthly_salary: data.monthly_salary, is_active: data.is_active } as any)
-    .eq('id', staffId)
+  const e164 = data.phone ? toE164(data.phone) : null
+  const { error } = await (supabase.rpc as any)('update_staff_record', {
+    p_staff_id: staffId,
+    p_full_name: data.full_name,
+    p_staff_type: data.staff_type,
+    p_monthly_salary: data.monthly_salary,
+    p_is_active: data.is_active,
+    p_phone_e164: e164,
+  })
   if (error) throw new Error(error.message)
-
-  if (data.profile_id && data.phone !== undefined) {
-    const e164 = data.phone ? toE164(data.phone) : null
-    await supabase.from('profiles').update({ full_name: data.full_name, phone: e164, is_active: data.is_active } as any).eq('id', data.profile_id)
-  }
 
   revalidatePath(`/personel/${staffId}`)
 }
@@ -182,39 +258,8 @@ export async function deleteStaff(staffId: string, _profileId?: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Oturum bulunamadı')
 
-  const { data: actor } = await supabase
-    .from('profiles')
-    .select('school_id, role')
-    .eq('id', user.id)
-    .single()
-  if (!actor?.school_id || !['school_admin', 'super_admin'].includes(actor.role)) {
-    throw new Error('Bu işlem için yetkiniz yok')
-  }
-
-  // İstemcinin gönderdiği profile id'ye güvenme; staff ilişkisini server tarafında bul.
-  const { data: staff, error: fetchError } = await supabase
-    .from('staff')
-    .select('id, profile_id, school_id')
-    .eq('id', staffId)
-    .eq('school_id', actor.school_id)
-    .single()
-  if (fetchError || !staff) throw new Error('Personel bulunamadı')
-
-  const { error } = await supabase
-    .from('staff')
-    .update({ is_active: false } as any)
-    .eq('id', staff.id)
-    .eq('school_id', actor.school_id)
+  const { error } = await (supabase.rpc as any)('archive_staff_record', { p_staff_id: staffId })
   if (error) throw new Error(error.message)
-
-  if (staff.profile_id) {
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({ is_active: false } as any)
-      .eq('id', staff.profile_id)
-      .eq('school_id', actor.school_id)
-    if (profileError) throw new Error('Personel arşivlendi fakat giriş hesabı kapatılamadı')
-  }
 
   revalidatePath('/finans')
 }
@@ -224,9 +269,8 @@ export async function deleteStaff(staffId: string, _profileId?: string) {
 export async function getStaffDetail(staffId: string) {
   const supabase = await createClient()
 
-  const { data: staff } = await supabase
-    .from('staff')
-    .select('id, full_name, staff_type, monthly_salary, hire_date, is_active, notes, profile_id')
+  const { data: staff } = await (supabase.from('staff') as any)
+    .select('id, full_name, staff_type, monthly_salary, hire_date, is_active, notes, profile_id, invitation_email, invitation_status')
     .eq('id', staffId)
     .single()
 
@@ -269,6 +313,8 @@ export async function getStaffDetail(staffId: string) {
       notes: string | null
       profile_id: string | null
       phone: string | null
+      invitation_email: string | null
+      invitation_status: string | null
     },
     groups: (groups ?? []) as { id: string; name: string; is_active: boolean | null }[],
     salaryPayments: (salaryPayments ?? []) as {

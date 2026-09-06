@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { assertAttendanceTakingEnabled } from '@/lib/features'
 
 export async function markLeaveRequestSeen(id: string) {
   const supabase = await createClient()
@@ -18,6 +19,7 @@ export async function upsertAttendance(
   studentId: string,
   status: 'present' | 'absent' | 'late' | 'excused'
 ) {
+  assertAttendanceTakingEnabled()
   const supabase = await createClient()
 
   const { data: existing } = await supabase

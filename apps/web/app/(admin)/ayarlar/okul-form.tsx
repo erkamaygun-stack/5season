@@ -125,7 +125,6 @@ export default function OkulForm({ school }: { school: School | null }) {
                 title="Logo yükle"
               >
                 {logoPreview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" />
                 ) : (
                   <ImageIcon className="w-6 h-6 text-muted-foreground/50" />

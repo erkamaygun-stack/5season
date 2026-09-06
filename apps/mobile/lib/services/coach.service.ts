@@ -32,14 +32,17 @@ export type StudentRecord = {
 // ─── Yardımcı ───
 
 function todayDate(): string {
-  return new Date().toISOString().split('T')[0];
+  return toLocalDateString(new Date());
+}
+
+function toLocalDateString(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 // ─── Bugünün oturumları ───
 
 export async function getTodaysSessions(staffId: string): Promise<SessionGroup[]> {
   const today = todayDate();
-  console.log('[getTodaysSessions] staffId:', staffId, 'today:', today);
 
   // Coach'un aktif gruplarını ve öğrenci sayılarını çek
   const { data: groups, error: groupsError } = await supabase
@@ -48,8 +51,8 @@ export async function getTodaysSessions(staffId: string): Promise<SessionGroup[]
     .eq('primary_coach_id', staffId)
     .eq('is_active', true);
 
-  console.log('[getTodaysSessions] groups:', JSON.stringify(groups), 'error:', JSON.stringify(groupsError));
-  if (groupsError || !groups?.length) return [];
+  if (groupsError) throw new Error('Antrenör grupları yüklenemedi.');
+  if (!groups?.length) return [];
 
   const groupIds = groups.map((g) => g.id);
 
@@ -61,8 +64,8 @@ export async function getTodaysSessions(staffId: string): Promise<SessionGroup[]
     .eq('session_date', today)
     .eq('status', 'scheduled');
 
-  console.log('[getTodaysSessions] sessions:', JSON.stringify(sessions), 'error:', JSON.stringify(sessionsError));
-  if (sessionsError || !sessions?.length) return [];
+  if (sessionsError) throw new Error('Bugünkü antrenmanlar yüklenemedi.');
+  if (!sessions?.length) return [];
 
   const groupMap = new Map(
     groups.map((g) => ({
@@ -91,19 +94,20 @@ export async function getTodaysSessions(staffId: string): Promise<SessionGroup[]
 export async function getPastSessions(staffId: string): Promise<PastSession[]> {
   const today = todayDate();
 
-  const { data: groups } = await supabase
+  const { data: groups, error: groupsError } = await supabase
     .from('groups')
     .select('id, name')
     .eq('primary_coach_id', staffId)
     .eq('is_active', true);
 
+  if (groupsError) throw new Error('Antrenör grupları yüklenemedi.');
   if (!groups?.length) return [];
 
   const groupIds = groups.map((g) => g.id);
   const groupMap = new Map(groups.map((g) => [g.id, g.name]));
 
   // Önce kayıtları çek (students join yok — view üzerinden ayrı sorgu)
-  const { data: sessions } = await supabase
+  const { data: sessions, error: sessionsError } = await supabase
     .from('attendance_sessions')
     .select('id, group_id, session_date, attendance_records(student_id, status)')
     .in('group_id', groupIds)
@@ -112,6 +116,7 @@ export async function getPastSessions(staffId: string): Promise<PastSession[]> {
     .order('session_date', { ascending: false })
     .limit(20);
 
+  if (sessionsError) throw new Error('Geçmiş antrenmanlar yüklenemedi.');
   if (!sessions) return [];
 
   // Tüm benzersiz öğrenci ID'lerini topla → student_basic_view'dan adları çek
@@ -125,12 +130,14 @@ export async function getPastSessions(staffId: string): Promise<PastSession[]> {
     ),
   ];
 
-  const { data: studentRows } = allStudentIds.length
+  const { data: studentRows, error: studentRowsError } = allStudentIds.length
     ? await supabase
         .from('student_basic_view')
         .select('id, full_name')
         .in('id', allStudentIds)
-    : { data: [] as { id: string; full_name: string }[] };
+    : { data: [] as { id: string; full_name: string }[], error: null };
+
+  if (studentRowsError) throw new Error('Öğrenci adları yüklenemedi.');
 
   const nameMap = new Map((studentRows ?? []).map((s) => [s.id, s.full_name]));
 
@@ -175,9 +182,7 @@ export async function getSessionStudents(sessionId: string): Promise<{
     .eq('id', sessionId)
     .single();
 
-  if (error || !session) {
-    return { sessionInfo: { groupName: 'Yoklama', sessionDate: '', startTime: '' }, students: [] };
-  }
+  if (error || !session) throw new Error('Yoklama oturumu bulunamadı.');
 
   const groupRelation = session.groups as unknown as { name: string } | { name: string }[] | null;
   const groupName = Array.isArray(groupRelation)
@@ -186,32 +191,37 @@ export async function getSessionStudents(sessionId: string): Promise<{
   const sessionDate: string = (session as any).session_date ?? '';
   const startTime: string = ((session as any).start_time ?? '').slice(0, 5);
 
-  const { data: sgRows } = await supabase
+  const { data: sgRows, error: studentGroupError } = await supabase
     .from('student_groups')
     .select('student_id')
     .eq('group_id', session.group_id)
     .eq('is_active', true);
 
+  if (studentGroupError) throw new Error('Grup öğrencileri yüklenemedi.');
   const studentIds = (sgRows ?? []).map((sg) => sg.student_id);
 
   // İzin isteklerini kontrol et (bu oturum tarihi + bu öğrenciler)
-  const { data: leaveRows } = studentIds.length && sessionDate
+  const { data: leaveRows, error: leaveError } = studentIds.length && sessionDate
     ? await supabase
         .from('leave_requests')
         .select('student_id')
         .in('student_id', studentIds)
         .eq('session_date', sessionDate)
         .neq('status', 'rejected')
-    : { data: [] as { student_id: string }[] };
+    : { data: [] as { student_id: string }[], error: null };
+
+  if (leaveError) throw new Error('İzin bilgileri yüklenemedi.');
 
   const excusedIds = new Set((leaveRows ?? []).map((r) => r.student_id));
 
-  const { data: studentRows } = studentIds.length
+  const { data: studentRows, error: studentRowsError } = studentIds.length
     ? await supabase
         .from('student_basic_view')
         .select('id, full_name')
         .in('id', studentIds)
-    : { data: [] as { id: string; full_name: string }[] };
+    : { data: [] as { id: string; full_name: string }[], error: null };
+
+  if (studentRowsError) throw new Error('Öğrenciler yüklenemedi.');
 
   const existingRecords = session.attendance_records as {
     student_id: string;
@@ -290,11 +300,12 @@ export async function getWeeklySchedule(staffId: string): Promise<WeekSlot[]> {
     .eq('primary_coach_id', staffId)
     .eq('is_active', true);
 
-  if (error || !groups?.length) return [];
+  if (error) throw new Error('Haftalık program yüklenemedi.');
+  if (!groups?.length) return [];
 
   const today = new Date();
   const todayDOW = today.getDay();
-  const todayISO = today.toISOString().split('T')[0];
+  const todayISO = toLocalDateString(today);
 
   const slots: WeekSlot[] = [];
 
@@ -313,7 +324,7 @@ export async function getWeeklySchedule(staffId: string): Promise<WeekSlot[]> {
 
       const slotDate = new Date(today);
       slotDate.setDate(today.getDate() + diff);
-      const dateISO = slotDate.toISOString().split('T')[0];
+      const dateISO = toLocalDateString(slotDate);
 
       slots.push({
         dayOfWeek: slot.day_of_week,

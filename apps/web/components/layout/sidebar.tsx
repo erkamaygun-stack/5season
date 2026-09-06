@@ -98,7 +98,6 @@ export default function Sidebar({ schoolName, logoUrl, isOpen, onHover, onLeave 
               )}
             >
               {logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={logoUrl}
                   alt={schoolName}

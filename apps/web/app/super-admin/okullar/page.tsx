@@ -27,7 +27,6 @@ export default async function OkullarPage() {
             <div key={school.id} className="bg-white rounded-lg border p-5 flex items-center gap-4">
               <div className="w-10 h-10 bg-primary/10 rounded-md flex items-center justify-center flex-shrink-0">
                 {school.logo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={school.logo_url} alt={school.name} className="w-10 h-10 rounded-md object-cover" />
                 ) : (
                   <Building2 className="w-5 h-5 text-primary" />
